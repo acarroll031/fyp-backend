@@ -1,30 +1,39 @@
 import pandas as pd
 
-# Load the CSV file into a DataFrame
-studentLabs = pd.read_csv("studentsLabs.csv")
+def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
+    # Load the CSV file into a DataFrame
+    student_labs = pd.read_csv(csv_file)
 
-# Remove identifying columns
-studentLabs = studentLabs.drop(["First Name", "Last Name", "Email"], axis = 1)
+    # Remove identifying columns
+    student_labs = student_labs.drop(["First Name", "Last Name", "Email"], axis=1)
 
-# Convert lab scores from 0-4 scale to 0-100 scale
-studentLabs.loc[:, 'Lab 1':'Lab 10'] = studentLabs.loc[:, 'Lab 1':'Lab 10'] * 25
+    # Reshape the DataFrame from wide to long format
+    student_labs = pd.melt(student_labs, id_vars=["Student ID"], var_name="assessment_name", value_name="score")
 
-# Define lab columns
-lab_columns = ["Lab 1", "Lab 2", "Lab 3", "Lab 4", "Lab 5", "Lab 6", "Lab 7", "Lab 8", "Lab 9", "Lab 10"]
+    # Add a new column for module code
+    student_labs.insert(1, "module_code", module_code)
 
-# Calculate the average grade across all labs
-studentLabs["averageGrade"] = studentLabs[lab_columns].mean(axis=1)
+    # Extract lab number from assessment_name and rename the column
+    student_labs["assessment_name"] = student_labs["assessment_name"].str.extract(r'(\d+)').astype(int)
+    student_labs = student_labs.rename(columns={"assessment_name": "assessment_number"})
 
-# Count the number of labs completed (score > 0)
-studentLabs["labsCompleted"] = studentLabs[lab_columns].gt(0).sum(axis=1)
+    # Add a new column for progress in semester
+    student_labs["progress_in_semester"] = student_labs["assessment_number"] / total_assessments
 
-# Determine performance trend: average of first half vs second half
-first_half = studentLabs[lab_columns[:5]].mean(axis=1)
-second_half = studentLabs[lab_columns[5:]].mean(axis=1)
-studentLabs["performanceTrend"] = second_half - first_half
+    # Normalise scores to be out of 100
+    student_labs["score"] = student_labs["score"] / assessment_total_score * 100
 
-# Round all numerical values to 2 decimal places and save to a new CSV file
-studentLabs = studentLabs.round(2)
-studentLabs.to_csv("studentLabsTransformed.csv", index = False)
+    # Round scores to 2 decimal places
+    student_labs.round(2)
 
-print(studentLabs.head())
+    # Create a new filename for the cleaned data
+    base_filename = csv_file.split(".csv")[0]
+    new_filename = base_filename + "_normalised.csv"
+
+    # Save the cleaned DataFrame to a new CSV file
+    student_labs.to_csv(new_filename, index=False)
+
+    print(student_labs.head())
+
+# Example usage
+preprocess_module_data("dummy_data/CS101.csv", "CS101", total_assessments=10, assessment_total_score=4)
