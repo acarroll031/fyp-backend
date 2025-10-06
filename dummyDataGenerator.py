@@ -9,7 +9,7 @@ def generate_full_student_data(num_students, num_assessments, module_id):
     final outcome columns for calculating a risk score.
     """
     data = []
-    assessment_columns = [f"Assessment_{i + 1}" for i in range(num_assessments)]
+    assessment_columns = [f"Lab {i + 1}" for i in range(num_assessments)]
 
     for _ in range(num_students):
         student_id = np.random.randint(10000000, 99999999)
@@ -32,40 +32,42 @@ def generate_full_student_data(num_students, num_assessments, module_id):
 
         scores = np.clip(base_scores, 0, 100).round(2)
 
-        # --- 2. Calculate Final Grade based on TOTAL Coursework ---
-        total_earned_points = np.sum(scores)
-        total_possible_points = num_assessments * 100
-        coursework_percentage = (total_earned_points / total_possible_points) * 100
-
-        # The final exam grade is correlated with coursework performance, plus some randomness.
-        final_grade = coursework_percentage + np.random.normal(0, 10)
-        final_grade = np.clip(final_grade, 0, 100).round(2)
-
-        # --- 3. Generate Repeat Information (Updated Logic) ---
-        had_to_repeat = False
-        passed_repeat = False
-        repeat_grade = np.nan
-
-        # **UPDATED LOGIC HERE**
-        if final_grade < 40:
-            # Student ALWAYS has to repeat if their grade is below 40.
-            had_to_repeat = True
-
-            # 70% chance of passing the repeat exam.
-            if np.random.rand() < 0.7:
-                passed_repeat = True
-                repeat_grade = np.random.uniform(40, 55)  # Pass grade for repeat is 40-55
-            else:
-                passed_repeat = False
-                repeat_grade = np.random.uniform(20, 39)  # Fail grade for repeat is 20-39
-
-        row = [student_id] + list(scores) + [final_grade, had_to_repeat, passed_repeat,
-                                             round(repeat_grade, 2) if not pd.isna(repeat_grade) else np.nan]
+        # # --- 2. Calculate Final Grade based on TOTAL Coursework ---
+        # total_earned_points = np.sum(scores)
+        # total_possible_points = num_assessments * 100
+        # coursework_percentage = (total_earned_points / total_possible_points) * 100
+        #
+        # # The final exam grade is correlated with coursework performance, plus some randomness.
+        # final_grade = coursework_percentage + np.random.normal(0, 10)
+        # final_grade = np.clip(final_grade, 0, 100).round(2)
+        #
+        # # --- 3. Generate Repeat Information (Updated Logic) ---
+        # had_to_repeat = False
+        # passed_repeat = False
+        # repeat_grade = np.nan
+        #
+        # # **UPDATED LOGIC HERE**
+        # if final_grade < 40:
+        #     # Student ALWAYS has to repeat if their grade is below 40.
+        #     had_to_repeat = True
+        #
+        #     # 70% chance of passing the repeat exam.
+        #     if np.random.rand() < 0.7:
+        #         passed_repeat = True
+        #         repeat_grade = np.random.uniform(40, 55)  # Pass grade for repeat is 40-55
+        #     else:
+        #         passed_repeat = False
+        #         repeat_grade = np.random.uniform(20, 39)  # Fail grade for repeat is 20-39
+        #
+        row = [student_id] + list(scores)
         data.append(row)
 
     df = pd.DataFrame(data,
-                      columns=['Student ID'] + assessment_columns + ['final_grade', 'had_to_repeat', 'passed_repeat',
-                                                                     'repeat_grade'])
+                      columns=['Student ID'] + assessment_columns)
+    df["First Name"] = "John"
+    df["Last Name"] = "Smith"
+    df["Email"] = "example@example.com"
+
     return df
 
 
@@ -82,7 +84,3 @@ print("Generated dummy_data/CS101.csv")
 df_cs204 = generate_full_student_data(100, 5, 'CS204')
 df_cs204.to_csv('dummy_data/CS204.csv', index=False)
 print("Generated dummy_data/CS204.csv")
-
-print("\n--- Sample of CS101 data with updated repeat logic ---")
-# Show a sample including students who likely had to repeat
-print(df_cs101.sort_values(by='final_grade').head())
