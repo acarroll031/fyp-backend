@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+from defusedxml.lxml import tostring
+
 
 def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
     """
@@ -104,13 +106,16 @@ def training_data(csv_file, progress_threshold):
     student_labs = student_labs.groupby("Student ID").agg(average_score=("score", "mean"),
                                                           assessments_completed=("score", lambda x: (x >0).sum()),
                                                             performance_trend=("score", calculate_performance_trend)
-                                                          )
+                                                          ).reset_index()
     student_labs = student_labs.round(2)
     # Create a new filename for the training data
     base_filename = csv_file.split(".csv")[0]
-    new_filename = base_filename + "_training.csv"
+    new_filename = "trainingData/" + base_filename + "_training_" + str(progress_threshold) + ".csv"
     student_labs.to_csv(new_filename, index=False)
 
     print(student_labs)
 
-training_data(csv_file="studentsLabs_normalised.csv", progress_threshold=1)
+for i in range(1, 11):
+    progress_threshold = i / 10
+    training_data(csv_file="studentsLabs_normalised.csv", progress_threshold=progress_threshold)
+
