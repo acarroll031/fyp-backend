@@ -2,6 +2,34 @@ import pandas as pd
 import numpy as np
 from defusedxml.lxml import tostring
 
+def merge_csv_files(file1, file2, output_file):
+    """
+    Merge two CSV files into one DataFrame and save to a new CSV file.
+    :param file1: str, path to the first CSV file
+    :param file2: str, path to the second CSV file
+    :param output_file: str, path to the output CSV file
+    """
+    # Load the CSV files into DataFrames
+    df1 = pd.read_csv(file1)
+    df2 = pd.read_csv(file2)
+
+    # Merge the DataFrames on common columns (if any)
+    merged_df = pd.merge(df1, df2, how='outer')
+
+    # Drop rows with any missing values
+    merged_df = merged_df.dropna()
+
+    # Generate random Student IDs (8-digit numbers)
+    merged_df['Student ID'] = np.random.randint(11111111, 99999999, size=len(merged_df))
+
+    # Round scores to 2 decimal places
+    merged_df.round(2)
+
+    # Save the merged DataFrame to a new CSV file
+    merged_df.to_csv(output_file, index=False)
+    print(f"Merged data saved to {output_file}")
+
+merge_csv_files("CS161_Data/CS161_Exam_Totals_2.csv", "CS161_Data/CS161_Lab_Totals_2.csv", "CS161_Data/CS161_Combined_Totals_2.csv")
 
 def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
     """
@@ -17,11 +45,8 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     # Load the CSV file into a DataFrame
     student_labs = pd.read_csv(csv_file)
 
-    # Remove identifying columns
-    student_labs = student_labs.drop(["First Name", "Last Name", "Email"], axis=1)
-
     # Reshape the DataFrame from wide to long format
-    student_labs = pd.melt(student_labs, id_vars=["Student ID"], var_name="assessment_name", value_name="score")
+    student_labs = pd.melt(student_labs, id_vars=["Student ID", "EXAM %"], var_name="assessment_name", value_name="score")
 
     # Add a new column for module code
     student_labs.insert(1, "module_code", module_code)
@@ -49,7 +74,8 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     print(student_labs.head())
 
 # Example usage
-# preprocess_module_data("dummy_data/CS101.csv", "CS101", total_assessments=10, assessment_total_score=4)
+preprocess_module_data("CS161_Data/CS161_Combined_Totals_2.csv", "CS161", total_assessments=10, assessment_total_score=4)
+
 
 def calculate_performance_trend(student_scores):
     """
@@ -80,6 +106,23 @@ def calculate_performance_trend(student_scores):
 
     return second_avg - first_avg
 
+def calculate_risk_score(final_grade):
+    """
+    Calculate a risk score based on the final grade.
+    The risk score is higher for lower final grades, with an additional penalty
+    for grades below 40.
+    :param final_grade: Series, the final grade of the student
+    :return float: risk score (0 to 100+)
+    """
+    final_grade = final_grade.iloc[0]
+    risk_score = 100-final_grade
+
+    if final_grade < 40:
+        risk_score += 40
+
+    return risk_score
+
+
 
 def training_data(csv_file, progress_threshold):
     """
@@ -101,13 +144,21 @@ def training_data(csv_file, progress_threshold):
 
     student_labs = pd.read_csv(csv_file)
 
+    # Filter the DataFrame based on the progress threshold
     student_labs = student_labs[student_labs["progress_in_semester"] <= progress_threshold]
 
+    # Group by Student ID and calculate required metrics
     student_labs = student_labs.groupby("Student ID").agg(average_score=("score", "mean"),
-                                                          assessments_completed=("score", lambda x: (x >0).sum()),
-                                                            performance_trend=("score", calculate_performance_trend)
+                                                          assessments_completed=("score", lambda x: (x > 0).sum()),
+                                                          performance_trend=("score", calculate_performance_trend),
+                                                          risk_score=("EXAM %", calculate_risk_score),
+                                                          progress_in_semester=("progress_in_semester", "max"),
                                                           ).reset_index()
+
+
+    # Round scores to 2 decimal places
     student_labs = student_labs.round(2)
+
     # Create a new filename for the training data
     base_filename = csv_file.split(".csv")[0]
     new_filename = "trainingData/" + base_filename + "_training_" + str(progress_threshold) + ".csv"
@@ -115,7 +166,7 @@ def training_data(csv_file, progress_threshold):
 
     print(student_labs)
 
+# Generate training data for progress thresholds from 0.1 to 1.0
 for i in range(1, 11):
     progress_threshold = i / 10
-    training_data(csv_file="studentsLabs_normalised.csv", progress_threshold=progress_threshold)
-
+    training_data(csv_file="CS161_Data/CS161_Combined_Totals_2_normalised.csv", progress_threshold=progress_threshold)
