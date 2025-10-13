@@ -117,8 +117,8 @@ def calculate_risk_score(final_grade):
     final_grade = final_grade.iloc[0]
     risk_score = 100-final_grade
 
-    if final_grade < 40:
-        risk_score += 40
+    # if final_grade < 40:
+    #     risk_score += 40
 
     return risk_score
 
@@ -170,3 +170,21 @@ def training_data(csv_file, progress_threshold):
 for i in range(1, 11):
     progress_threshold = i / 10
     training_data(csv_file="CS161_Data/CS161_Combined_Totals_2_normalised.csv", progress_threshold=progress_threshold)
+
+def combine_training_data(file_list, output_file):
+    """
+    Combine multiple training data CSV files into one DataFrame and save to a new CSV file.
+    :param file_list: list of str, paths to the input CSV files
+    :param output_file: str, path to the output CSV file
+    """
+    # Load and concatenate the CSV files into a single DataFrame
+    df_list = [pd.read_csv(file) for file in file_list]
+    combined_df = pd.concat(df_list, ignore_index=True)
+
+    # Save the combined DataFrame to a new CSV file
+    combined_df.to_csv(output_file, index=False)
+    print("Combined training data saved to {output_file}")
+
+# Example usage
+file_list = ["trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_{i/10}.csv" for i in range(1, 11)]
+combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_0.1-1.0.csv")
