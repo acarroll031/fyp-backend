@@ -46,7 +46,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     student_labs = pd.read_csv(csv_file)
 
     # Reshape the DataFrame from wide to long format
-    student_labs = pd.melt(student_labs, id_vars=["Student ID", "EXAM %"], var_name="assessment_name", value_name="score")
+    student_labs = pd.melt(student_labs, id_vars=["Student ID", "TOTAL"], var_name="assessment_name", value_name="score")
 
     # Add a new column for module code
     student_labs.insert(1, "module_code", module_code)
@@ -151,7 +151,7 @@ def training_data(csv_file, progress_threshold):
     student_labs = student_labs.groupby("Student ID").agg(average_score=("score", "mean"),
                                                           assessments_completed=("score", lambda x: (x > 0).sum()),
                                                           performance_trend=("score", calculate_performance_trend),
-                                                          risk_score=("EXAM %", calculate_risk_score),
+                                                          risk_score=("TOTAL", calculate_risk_score),
                                                           progress_in_semester=("progress_in_semester", "max"),
                                                           ).reset_index()
 
@@ -183,8 +183,8 @@ def combine_training_data(file_list, output_file):
 
     # Save the combined DataFrame to a new CSV file
     combined_df.to_csv(output_file, index=False)
-    print("Combined training data saved to {output_file}")
+    print(f"Combined training data saved to {output_file}")
 
 # Example usage
-file_list = ["trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_{i/10}.csv" for i in range(1, 11)]
+file_list = [f"trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_{i/10}.csv" for i in range(1, 11)]
 combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_0.1-1.0.csv")
