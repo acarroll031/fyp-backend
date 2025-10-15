@@ -25,11 +25,13 @@ def merge_csv_files(file1, file2, output_file):
     # Round scores to 2 decimal places
     merged_df.round(2)
 
+    merged_df = merged_df.drop(["Email", "Total"], axis=1)
+
     # Save the merged DataFrame to a new CSV file
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
 
-merge_csv_files("CS161_Data/CS161_Exam_Totals_2.csv", "CS161_Data/CS161_Lab_Totals_2.csv", "CS161_Data/CS161_Combined_Totals_2.csv")
+merge_csv_files("CS161_Data/CS161_Exam_Totals_1.csv", "CS161_Data/CS161_Lab_Totals_1.csv", "CS161_Data/CS161_Combined_Totals_1.csv")
 
 def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
     """
@@ -59,7 +61,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     student_labs["progress_in_semester"] = student_labs["assessment_number"] / total_assessments
 
     # Normalise scores to be out of 100
-    student_labs["score"] = student_labs["score"] / assessment_total_score * 100
+    # student_labs["score"] = student_labs["score"] / assessment_total_score * 100
 
     # Round scores to 2 decimal places
     student_labs.round(2)
@@ -74,7 +76,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     print(student_labs.head())
 
 # Example usage
-preprocess_module_data("CS161_Data/CS161_Combined_Totals_2.csv", "CS161", total_assessments=10, assessment_total_score=4)
+# preprocess_module_data("CS161_Data/CS161_Combined_Totals_1.csv", "CS161", total_assessments=10, assessment_total_score=4)
 
 
 def calculate_performance_trend(student_scores):
@@ -122,6 +124,24 @@ def calculate_risk_score(final_grade):
 
     return risk_score
 
+def calculate_max_consecutive_misses(student_scores):
+    """
+    Calculate the maximum number of consecutive missed assessments (score of 0).
+    :param student_scores: Series, the scores of the student
+    :return int: maximum number of consecutive misses
+    """
+    max_misses = 0
+    current_misses = 0
+
+    for score in student_scores:
+        if score == 0:
+            current_misses += 1
+            max_misses = max(max_misses, current_misses)
+        else:
+            current_misses = 0
+
+    return max_misses
+
 
 
 def training_data(csv_file, progress_threshold):
@@ -153,6 +173,7 @@ def training_data(csv_file, progress_threshold):
                                                           performance_trend=("score", calculate_performance_trend),
                                                           risk_score=("TOTAL", calculate_risk_score),
                                                           progress_in_semester=("progress_in_semester", "max"),
+                                                          max_consecutive_misses=("score", calculate_max_consecutive_misses)
                                                           ).reset_index()
 
 
