@@ -1,6 +1,12 @@
+import hashlib
+
 import pandas as pd
 import numpy as np
 from defusedxml.lxml import tostring
+
+def anonymise_id(student_id, salt):
+    # Combine student_id and salt, encode, and hash
+    return hashlib.sha256(f"{student_id}_{salt}".encode()).hexdigest()[:16]
 
 def merge_csv_files(file1, file2, output_file):
     """
@@ -20,18 +26,19 @@ def merge_csv_files(file1, file2, output_file):
     merged_df = merged_df.dropna()
 
     # Generate random Student IDs (8-digit numbers)
-    merged_df['Student ID'] = np.random.randint(11111111, 99999999, size=len(merged_df))
+    salt = output_file  # Use a different salt for each dataset
+    merged_df['Student ID'] = merged_df['Student ID'].apply(lambda x: anonymise_id(x, salt))
 
     # Round scores to 2 decimal places
     merged_df.round(2)
 
-    merged_df = merged_df.drop(["Email", "Total"], axis=1)
+    # merged_df = merged_df.drop(["Email", "Total"], axis=1)
 
     # Save the merged DataFrame to a new CSV file
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
 
-merge_csv_files("CS161_Data/CS161_Exam_Totals_1.csv", "CS161_Data/CS161_Lab_Totals_1.csv", "CS161_Data/CS161_Combined_Totals_1.csv")
+merge_csv_files("CS161_Data/CS161_Exam_Totals_2.csv", "CS161_Data/CS161_Lab_Totals_2.csv", "CS161_Data/CS161_Combined_Totals_2.csv")
 
 def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
     """
@@ -61,7 +68,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     student_labs["progress_in_semester"] = student_labs["assessment_number"] / total_assessments
 
     # Normalise scores to be out of 100
-    # student_labs["score"] = student_labs["score"] / assessment_total_score * 100
+    student_labs["score"] = student_labs["score"] / assessment_total_score * 100
 
     # Round scores to 2 decimal places
     student_labs.round(2)
@@ -76,7 +83,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     print(student_labs.head())
 
 # Example usage
-# preprocess_module_data("CS161_Data/CS161_Combined_Totals_1.csv", "CS161", total_assessments=10, assessment_total_score=4)
+preprocess_module_data("CS161_Data/CS161_Combined_Totals_2.csv", "CS161", total_assessments=10, assessment_total_score=4)
 
 
 def calculate_performance_trend(student_scores):
@@ -190,7 +197,7 @@ def training_data(csv_file, progress_threshold):
 # Generate training data for progress thresholds from 0.1 to 1.0
 for i in range(1, 11):
     progress_threshold = i / 10
-    training_data(csv_file="CS161_Data/CS161_Combined_Totals_2_normalised.csv", progress_threshold=progress_threshold)
+    training_data(csv_file="CS161_Data/CS161_Combined_Totals_1_normalised.csv", progress_threshold=progress_threshold)
 
 def combine_training_data(file_list, output_file):
     """
@@ -207,5 +214,5 @@ def combine_training_data(file_list, output_file):
     print(f"Combined training data saved to {output_file}")
 
 # Example usage
-file_list = [f"trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_{i/10}.csv" for i in range(1, 11)]
-combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_0.1-1.0.csv")
+file_list = [f"trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_{i/10}.csv" for i in range(1, 11)]
+combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_0.1-1.0.csv")
