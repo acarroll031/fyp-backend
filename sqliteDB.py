@@ -9,7 +9,8 @@ create_grade_table = '''
         student_name TEXT NOT NULL,
         module TEXT NOT NULL,
         assessment_number INTEGER NOT NULL,
-        score REAL NOT NULL
+        score REAL NOT NULL,
+        progress_in_semester INTEGER NOT NULL
     );
 '''
 
@@ -22,7 +23,7 @@ create_student_table = '''
         assessments_completed INTEGER,
         performance_trend REAL,
         max_consecutive_misses INTEGER,
-        progress_in_semester INTEGER
+        progress_in_semester FLOAT
     );'''
 
 create_risk_score_table = '''
@@ -44,8 +45,8 @@ cursor_obj.execute(create_risk_score_table)
 print("Risk Scores table created successfully")
 
 
-cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (1, 'Adam', 'CS161', 85.5)")
-cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (2, 'Daniel', 'CS161', 72.0)")
+cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (1, 'Adam', 'CS161', 45)")
+cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (2, 'Daniel', 'CS161', 5)")
 cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (3, 'Luke', 'CS162', 90.0)")
 
 print("Data Inserted in the table: ")
