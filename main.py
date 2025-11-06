@@ -74,27 +74,36 @@ def get_students():
     return students
 
 @app.post("/students/{module_id}/grades")
-async def post_grades(module_id: str, progress_in_semester: int, file: UploadFile = File(...)):
+async def post_grades(
+        module_id: str,
+        progress_in_semester: int,
+        file: UploadFile = File(...)
+):
     contents = await file.read()
     csv_data = contents.decode("utf-8")
     csv_reader = csv.DictReader(io.StringIO(csv_data))
 
-    connection = sqlite3.connect("fyp_database.db")
+    connection = sqlite3.connect("fyp_database.db", timeout=10.0)
     cursor = connection.cursor()
 
-    for grade in csv_reader:
-        cursor.execute(
-            "INSERT INTO grades (student_id, student_name, module, assessment_number, score, progress_in_semester) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                grade["student_id"],
-                grade["student_name"],
-                module_id,
-                grade["assessment_number"],
-                grade["score"],
-                progress_in_semester),
-        )
+    try:
+        for grade in csv_reader:
+            cursor.execute(
+                "INSERT INTO grades (student_id, student_name, module, assessment_number, score, progress_in_semester) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    grade["student_id"],
+                    grade["student_name"],
+                    module_id,
+                    grade["assessment_number"],
+                    grade["score"],
+                    progress_in_semester),
+            )
+        connection.commit()
+        return {"message": "Grades inserted successfully"}
+    except Exception as e:
+        connection.rollback()
+        raise e
+    finally:
+        connection.close()
 
-    connection.commit()
-    connection.close()
-    return {"message": "Grades inserted successfully"}
 
