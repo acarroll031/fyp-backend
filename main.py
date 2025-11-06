@@ -38,7 +38,7 @@ class PredictRequest(BaseModel):
     assessments_completed: int
     performance_trend: float
     max_consecutive_misses: int
-    progress_in_semester: int
+    progress_in_semester: float
 
 
 @app.get("/")
@@ -76,7 +76,7 @@ def get_students():
 @app.post("/students/{module_id}/grades")
 async def post_grades(
         module_id: str,
-        progress_in_semester: int,
+        progress_in_semester: float,
         file: UploadFile = File(...)
 ):
     contents = await file.read()
