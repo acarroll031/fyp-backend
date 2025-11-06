@@ -36,6 +36,8 @@ class PredictRequest(BaseModel):
     performance_trend: float
     max_consecutive_misses: int
     progress_in_semester: int
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello, World!"}
@@ -54,4 +56,14 @@ def predict_risk(
     ]]
     risk_score = model.predict(features)
     return {"risk_score": risk_score[0]}
+
+@app.get("/students")
+def get_students():
+    # Dummy data for demonstration purposes
+    students = [
+        {"id": 1, "name": "Alice", "risk_score": 0.75},
+        {"id": 2, "name": "Bob", "risk_score": 0.45},
+        {"id": 3, "name": "Charlie", "risk_score": 0.60},
+    ]
+    return {"students": students}
 
