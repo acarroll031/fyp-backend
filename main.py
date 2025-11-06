@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, Response, Depends
 import joblib
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import sqlite3
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,11 +60,14 @@ def predict_risk(
 
 @app.get("/students")
 def get_students():
-    # Dummy data for demonstration purposes
-    students = [
-        {"id": 1, "name": "Alice", "risk_score": 0.75},
-        {"id": 2, "name": "Bob", "risk_score": 0.45},
-        {"id": 3, "name": "Charlie", "risk_score": 0.60},
-    ]
-    return {"students": students}
+    connection = sqlite3.connect("fyp_database.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT student_id, student_name, module, risk_score FROM risk_scores")
+    rows = cursor.fetchall()
+    connection.close()
+
+    students = [dict(row) for row in rows]
+    return students
 
