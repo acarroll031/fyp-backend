@@ -1,7 +1,9 @@
 import csv
 import io
 from contextlib import asynccontextmanager
+from dataProcessing import convert_grades_to_students
 
+import pandas as pd
 from fastapi import FastAPI, Request, Response, Depends, UploadFile, File
 import joblib
 from pydantic import BaseModel
@@ -77,7 +79,8 @@ def get_students():
 async def post_grades(
         module_id: str,
         progress_in_semester: float,
-        file: UploadFile = File(...)
+        file: UploadFile = File(...),
+        model=Depends(get_model)
 ):
     contents = await file.read()
     csv_data = contents.decode("utf-8")
@@ -99,11 +102,37 @@ async def post_grades(
                     progress_in_semester),
             )
         connection.commit()
+        grades_df = pd.read_sql_query("SELECT * FROM grades", connection)
+        student_df = convert_grades_to_students(grades_df)
+        student_df.to_sql("students", connection, if_exists="replace", index=False)
+        connection.commit()
+
+        features = student_df[[
+            "average_score",
+            "assessments_completed",
+            "performance_trend",
+            "max_consecutive_misses",
+            "progress_in_semester"
+        ]].values
+
+        risk_scores = model.predict(features)
+        student_df["risk_score"] = risk_scores
+
+        risk_scores_df = student_df[[
+            "student_id",
+            "student_name",
+            "module",
+            "risk_score"
+        ]]
+        risk_scores_df.to_sql("risk_scores", connection, if_exists="replace", index=False)
+        connection.commit()
         return {"message": "Grades inserted successfully"}
+
     except Exception as e:
         connection.rollback()
         raise e
     finally:
         connection.close()
+
 
 

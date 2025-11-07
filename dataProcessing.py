@@ -38,7 +38,7 @@ def merge_csv_files(file1, file2, output_file):
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
 
-merge_csv_files("CS161_Data/CS161_Exam_Totals_2.csv", "CS161_Data/CS161_Lab_Totals_2.csv", "CS161_Data/CS161_Combined_Totals_2.csv")
+#merge_csv_files("CS161_Data/CS161_Exam_Totals_2.csv", "CS161_Data/CS161_Lab_Totals_2.csv", "CS161_Data/CS161_Combined_Totals_2.csv")
 
 def preprocess_module_data(csv_file, module_code, total_assessments, assessment_total_score):
     """
@@ -83,7 +83,7 @@ def preprocess_module_data(csv_file, module_code, total_assessments, assessment_
     print(student_labs.head())
 
 # Example usage
-preprocess_module_data("CS161_Data/CS161_Combined_Totals_2.csv", "CS161", total_assessments=10, assessment_total_score=4)
+#preprocess_module_data("CS161_Data/CS161_Combined_Totals_2.csv", "CS161", total_assessments=10, assessment_total_score=4)
 
 
 def calculate_performance_trend(student_scores):
@@ -195,9 +195,9 @@ def training_data(csv_file, progress_threshold):
     print(student_labs)
 
 # Generate training data for progress thresholds from 0.1 to 1.0
-for i in range(1, 11):
-    progress_threshold = i / 10
-    training_data(csv_file="CS161_Data/CS161_Combined_Totals_1_normalised.csv", progress_threshold=progress_threshold)
+# for i in range(1, 11):
+#     progress_threshold = i / 10
+#     training_data(csv_file="CS161_Data/CS161_Combined_Totals_1_normalised.csv", progress_threshold=progress_threshold)
 
 def combine_training_data(file_list, output_file):
     """
@@ -213,6 +213,29 @@ def combine_training_data(file_list, output_file):
     combined_df.to_csv(output_file, index=False)
     print(f"Combined training data saved to {output_file}")
 
+
+def convert_grades_to_students(grades_df):
+    """Convert grades data to students schema format."""
+
+    # Group by student and calculate metrics
+    students_df = grades_df.groupby(["student_id", 'module', 'student_name']).agg(
+        average_score=("score", "mean"),
+        assessments_completed=("score", lambda x: (x > 0).sum()),
+        performance_trend=("score", calculate_performance_trend),
+        progress_in_semester=("progress_in_semester", "max"),
+        max_consecutive_misses=("score", calculate_max_consecutive_misses)
+    ).reset_index()
+
+    students_df.columns = ['student_id','student_name', 'module', 'average_score',
+                           'assessments_completed', 'performance_trend',
+                           'progress_in_semester', 'max_consecutive_misses']
+
+    # Round average grade to 2 decimal places
+    students_df = students_df.round(2)
+
+    return students_df
+
+
 # Example usage
-file_list = [f"trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_{i/10}.csv" for i in range(1, 11)]
-combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_0.1-1.0.csv")
+#file_list = [f"trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_{i/10}.csv" for i in range(1, 11)]
+#combine_training_data(file_list, "trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_0.1-1.0.csv")
