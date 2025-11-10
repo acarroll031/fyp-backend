@@ -5,7 +5,7 @@ cursor_obj = connection_obj.cursor()
 
 create_grade_table = '''
     CREATE TABLE IF NOT EXISTS grades (
-        student_id INTEGER PRIMARY KEY,
+        student_id INTEGER,
         student_name TEXT NOT NULL,
         module TEXT NOT NULL,
         assessment_number INTEGER NOT NULL,
@@ -16,7 +16,7 @@ create_grade_table = '''
 
 create_student_table = '''
     CREATE TABLE IF NOT EXISTS students (
-        student_id INTEGER PRIMARY KEY,
+        student_id INTEGER,
         student_name TEXT NOT NULL,
         module TEXT NOT NULL,
         average_score REAL,
@@ -28,7 +28,7 @@ create_student_table = '''
 
 create_risk_score_table = '''
     CREATE TABLE IF NOT EXISTS risk_scores (
-        student_id INTEGER PRIMARY KEY,
+        student_id INTEGER,
         student_name TEXT NOT NULL,
         module TEXT NOT NULL,
         risk_score REAL

@@ -3,7 +3,7 @@ import numpy as np
 import random
 
 
-def generate_test_csv(filename="test_upload.csv", num_students=100, num_assessments=1):
+def generate_test_csv(filename="test_upload2.csv", num_students=100, num_assessments=1):
     """
     Generates a dummy CSV file in the 'long' format for testing the
     student data upload endpoint.
@@ -27,7 +27,7 @@ def generate_test_csv(filename="test_upload.csv", num_students=100, num_assessme
         student_name = f"{random.choice(first_names)} {random.choice(last_names)}"
 
         # 3. For each student, create 10 assessment entries
-        for j in range(1, num_assessments + 1):
+        for j in range(2, num_assessments + 2):
             assessment_number = j
 
             # Simulate a realistic score (e.g., 70% chance of a good score, 30% chance of a low/zero score)

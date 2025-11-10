@@ -218,22 +218,28 @@ def convert_grades_to_students(grades_df):
     """Convert grades data to students schema format."""
 
     # Group by student and calculate metrics
-    students_df = grades_df.groupby(["student_id", 'module', 'student_name']).agg(
+    students_df = grades_df.groupby(["student_id", 'module']).agg(
+        student_name=("student_name", "first"),
         average_score=("score", "mean"),
-        assessments_completed=("score", lambda x: (x > 0).sum()),
+        assessments_completed=("assessment_number", "count"),
         performance_trend=("score", calculate_performance_trend),
         progress_in_semester=("progress_in_semester", "max"),
         max_consecutive_misses=("score", calculate_max_consecutive_misses)
     ).reset_index()
 
-    students_df.columns = ['student_id','student_name', 'module', 'average_score',
-                           'assessments_completed', 'performance_trend',
-                           'progress_in_semester', 'max_consecutive_misses']
-
     # Round average grade to 2 decimal places
     students_df = students_df.round(2)
 
-    return students_df
+    return students_df[[
+        'student_id',
+        'student_name',
+        'module',
+        'average_score',
+        'assessments_completed',
+        'performance_trend',
+        'max_consecutive_misses',
+        'progress_in_semester'
+    ]]
 
 
 # Example usage
