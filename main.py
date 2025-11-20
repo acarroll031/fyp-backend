@@ -112,12 +112,19 @@ def predict_risk(
     return {"risk_score": risk_score[0]}
 
 @app.get("/students")
-def get_students():
+def get_students(current_user_email: str = Depends(get_current_user)):
     connection = sqlite3.connect("fyp_database.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
-    cursor.execute("SELECT student_id, student_name, module, risk_score FROM risk_scores")
+    query="""
+        SELECT s.student_id, s.student_name, s.module, s.risk_score
+        FROM risk_scores s
+        JOIN modules m ON s.module = m.module_code
+        WHERE m.lecturer_email = ?
+    """
+
+    cursor.execute(query , (current_user_email,))
     rows = cursor.fetchall()
     connection.close()
 
