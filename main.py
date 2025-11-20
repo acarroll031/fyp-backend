@@ -268,6 +268,10 @@ class ModuleCreate(BaseModel):
     module_code: str
     assessment_count: int
 
+class ModuleUpdate(BaseModel):
+    module_name: Optional[str] = None
+    assessment_count: Optional[int] = None
+
 @app.post("/modules")
 def create_module(
         module: ModuleCreate,
@@ -306,6 +310,55 @@ def get_modules(
     connection.close()
 
     return [dict(row) for row in modules]
+
+@app.put("/modules/{module_code}")
+def update_module(
+        module_code: str,
+        module_update: ModuleUpdate,
+        current_user_email: str = Depends(get_current_user)
+):
+    connection = sqlite3.connect("fyp_database.db")
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * 
+        FROM modules 
+        WHERE module_code = ? AND lecturer_email = ?
+    """, (module_code, current_user_email))
+    if not cursor.fetchone():
+        connection.close()
+        raise HTTPException(status_code=404, detail="Module not found or access denied")
+
+    if module_update.module_name:
+        cursor.execute(""" UPDATE modules SET module_name = ? WHERE module_code = ? """, (module_update.module_name, module_code))
+    if module_update.assessment_count:
+        cursor.execute(""" UPDATE modules SET assessment_count = ? WHERE module_code = ? """, (module_update.assessment_count, module_code))
+
+    connection.commit()
+    connection.close()
+    return {"message": f"Module {module_update.module_code} updated successfully"}
+
+@app.delete("/modules/{module_code}")
+def delete_module(
+        module_code: str,
+        current_user_email: str = Depends(get_current_user)
+):
+    connection = sqlite3.connect("fyp_database.db")
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * 
+        FROM modules 
+        WHERE module_code = ? AND lecturer_email = ?
+    """, (module_code, current_user_email))
+    if not cursor.fetchone():
+        connection.close()
+        raise HTTPException(status_code=404, detail="Module not found or access denied")
+
+    cursor.execute(""" DELETE FROM modules WHERE module_code = ? """, (module_code,))
+    connection.commit()
+    connection.close()
+    return {"message": f"Module {module_code} deleted successfully"}
 
 
 
