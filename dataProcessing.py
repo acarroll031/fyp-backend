@@ -149,6 +149,14 @@ def calculate_max_consecutive_misses(student_scores):
 
     return max_misses
 
+def calculate_assessments_completed(scores):
+    """
+    Calculate the number of assessments completed (score > 0).
+    :param scores: Series, the scores of the student
+    :return int: number of assessments completed
+    """
+    return (scores > 0).sum()
+
 
 
 def training_data(csv_file, progress_threshold):
@@ -221,7 +229,7 @@ def convert_grades_to_students(grades_df):
     students_df = grades_df.groupby(["student_id", 'module']).agg(
         student_name=("student_name", "first"),
         average_score=("score", "mean"),
-        assessments_completed=("assessment_number", "count"),
+        assessments_completed=("score", calculate_assessments_completed),
         performance_trend=("score", calculate_performance_trend),
         progress_in_semester=("progress_in_semester", "max"),
         max_consecutive_misses=("score", calculate_max_consecutive_misses)

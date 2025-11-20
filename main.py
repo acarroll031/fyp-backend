@@ -91,13 +91,34 @@ async def post_grades(
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
         print("grades_df: ",grades_df.head())
-        grades_df.to_sql("grades", connection, if_exists="append", index=False)
+
+        grade_cols = [
+            'student_id', 'student_name', 'assessment_number',
+            'score', 'module', 'progress_in_semester'
+        ]
+        grades_data = grades_df[grade_cols].to_records(index=False).tolist()
+        cursor.executemany("""
+                    INSERT OR REPLACE INTO grades (
+                        student_id, student_name, assessment_number, 
+                        score, module, progress_in_semester
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, grades_data)
         connection.commit()
+
         total_grades_df = pd.read_sql_query("SELECT * FROM grades", connection)
         print("total_grades_df: ",total_grades_df.head())
+
         student_df = convert_grades_to_students(total_grades_df)
-        print("student_df: ",student_df.head())
-        student_df.to_sql("students", connection, if_exists="append", index=False)
+        print("student_df: ", student_df.head())
+
+        student_data = student_df.to_records(index=False).tolist()
+        cursor.executemany('''
+            INSERT OR REPLACE INTO students (
+                student_id, student_name, module, average_score, assessments_completed, performance_trend, max_consecutive_misses, progress_in_semester
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', student_data)
         connection.commit()
 
         features = student_df[[
@@ -109,17 +130,6 @@ async def post_grades(
         ]].values
         risk_scores = model.predict(features)
         student_df["risk_score"] = risk_scores
-        student_df = student_df[[
-            'student_id',
-            'student_name',
-            'module',
-            'average_score',
-            'assessments_completed',
-            'performance_trend',
-            'max_consecutive_misses',
-            'progress_in_semester',
-            'risk_score'
-        ]]
         print("student_df: ",student_df.head())
         risk_scores_df = student_df[[
             "student_id",
@@ -129,8 +139,13 @@ async def post_grades(
         ]]
         risk_scores_df['risk_score'] = risk_scores_df['risk_score'].round(2)
         print("risk_scores_df: ",risk_scores_df.head())
-        risk_scores_df.to_sql("risk_scores", connection, if_exists="replace", index=False)
+        risk_data = risk_scores_df.to_records(index=False).tolist()
+        cursor.executemany('''
+            INSERT OR REPLACE INTO risk_scores (student_id, student_name, module, risk_score)
+            VALUES (?, ?, ?, ?)
+        ''', risk_data)
         connection.commit()
+
         return {"message": "Grades inserted successfully"}
 
     except Exception as e:

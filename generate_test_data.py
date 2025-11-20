@@ -1,60 +1,45 @@
 import pandas as pd
 import numpy as np
-import random
 
 
-def generate_test_csv(filename="test_upload2.csv", num_students=100, num_assessments=1):
+def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate=0.10):
     """
-    Generates a dummy CSV file in the 'long' format for testing the
-    student data upload endpoint.
+    Generates assessment files where some students get 0 because they didn't turn up.
+    missing_rate: The probability (0.0 to 1.0) that a student misses the exam.
+                  0.10 means roughly 10% of students will get a 0.
     """
+    # 1. Load students
+    df_source = pd.read_csv(source_file)
+    students_base = df_source[['student_id', 'student_name']].drop_duplicates()
 
-    # 1. Create lists of dummy names to pull from
-    first_names = [
-        'Aaliyah', 'Aaron', 'Abdula', 'Adam', 'Alex', 'Megan', 'Michael',
-        'Leo', 'Killian', 'Kate', 'Ben', 'Ciara', 'Conor', 'Darragh'
-    ]
-    last_names = [
-        'Doyle', 'Moran', 'Kennedy', 'Sheehan', 'Boyle', 'Smith', 'Quinn',
-        'McMahon', 'McCarthy', 'Ryan', 'Murphy', 'Walsh', 'Kelly', 'Byrne'
-    ]
+    print(f"Generating files with a {int(missing_rate * 100)}% missing rate...")
 
-    data = []
+    for i in range(1, num_files + 1):
+        df_current = students_base.copy()
+        df_current['assessment_number'] = i
 
-    # 2. Create 10 unique students
-    for i in range(num_students):
-        student_id = 1000 + i
-        student_name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        # 2. Generate base scores (Normal Distribution)
+        scores = np.random.normal(loc=65, scale=15, size=len(df_current))
+        scores = np.clip(scores, 0, 100)
 
-        # 3. For each student, create 10 assessment entries
-        for j in range(2, num_assessments + 2):
-            assessment_number = j
+        # 3. Apply "Not Turn Up" Logic
+        # Create a boolean mask: True if student misses, False if they attend
+        # np.random.random() generates a float between 0.0 and 1.0 for each row
+        missed_mask = np.random.random(len(df_current)) < missing_rate
 
-            # Simulate a realistic score (e.g., 70% chance of a good score, 30% chance of a low/zero score)
-            if random.random() < 0.75:
-                score = round(random.uniform(60, 100), 2)
-            else:
-                score = round(random.uniform(0, 50), 2)
+        # Overwrite the scores where the mask is True with 0
+        scores[missed_mask] = 0
 
-            # Add the row to our data list
-            data.append({
-                "student_id": student_id,
-                "student_name": student_name,
-                "assessment_number": assessment_number,
-                "score": score
-            })
+        df_current['score'] = np.round(scores, 2)
 
-    # 4. Convert the list of data into a pandas DataFrame
-    df = pd.DataFrame(data)
+        # 4. Save
+        filename = f'assessment_{i}.csv'
+        df_current.to_csv(filename, index=False)
 
-    # 5. Save the DataFrame to a CSV file
-    df.to_csv(filename, index=False)
-
-    print(f"Successfully generated '{filename}' with {len(df)} entries.")
-    print("\n--- Sample of Generated Data ---")
-    print(df.head())
+        # Optional: Print how many missed this specific assessment
+        miss_count = np.sum(missed_mask)
+        print(f" -> Generated: {filename} ({miss_count} students missed)")
 
 
-# --- Run the function ---
 if __name__ == "__main__":
-    generate_test_csv()
+    generate_assessment_data_with_misses('test_upload.csv')
