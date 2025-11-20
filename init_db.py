@@ -53,10 +53,11 @@ create_lecturers_table = '''
 
 create_modules_table = '''
     CREATE TABLE IF NOT EXISTS modules (
-        module_id TEXT PRIMARY KEY,
+        module_code TEXT PRIMARY KEY,
         module_name TEXT NOT NULL,
-        lecturer_id INTEGER,
-        FOREIGN KEY (lecturer_id) REFERENCES lecturers (lecturer_id)
+        lecturer_email INTEGER,
+        assessment_count INTEGER NOT NULL,
+        FOREIGN KEY (lecturer_email) REFERENCES lecturers (email)
     );'''
 
 

@@ -256,5 +256,50 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+class ModuleCreate(BaseModel):
+    module_name: str
+    module_code: str
+    assessment_count: int
+
+@app.post("/modules")
+def create_module(
+        module: ModuleCreate,
+        current_user: str = Depends(get_current_user)
+):
+    connection = sqlite3.connect("fyp_database.db")
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO modules (module_name, module_code, assessment_count, lecturer_email) VALUES (?, ?, ?, ?)
+        """,
+         (module.module_name, module.module_code, module.assessment_count, current_user))
+        connection.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Module code already exists")
+    finally:
+        connection.close()
+
+    return {"message": f"Module {module.module_code} created successfully"}
+
+@app.get("/modules")
+def get_modules(
+        current_user_email: str = Depends(get_current_user)
+):
+    connection = sqlite3.connect("fyp_database.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * 
+        FROM modules 
+        WHERE lecturer_email = ?
+    """, (current_user_email,))
+    modules = cursor.fetchall()
+    connection.close()
+
+    return [dict(row) for row in modules]
+
+
 
 
