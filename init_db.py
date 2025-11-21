@@ -9,77 +9,77 @@ cursor_obj.execute("DROP TABLE IF EXISTS risk_scores")
 cursor_obj.execute("DROP TABLE IF EXISTS lecturers")
 cursor_obj.execute("DROP TABLE IF EXISTS modules")
 
-create_grade_table = '''
-    CREATE TABLE IF NOT EXISTS grades (
-        student_id INTEGER,
-        student_name TEXT NOT NULL,
-        module TEXT NOT NULL,
-        assessment_number INTEGER NOT NULL,
-        score REAL NOT NULL,
-        progress_in_semester INTEGER NOT NULL,
-        PRIMARY KEY (student_id, module, assessment_number)
-    );
-'''
+# Create Grades Table
+fd = open('SQL Scripts/grades.sql', 'r')
+sqlFile = fd.read()
+fd.close()
 
-create_student_table = '''
-    CREATE TABLE IF NOT EXISTS students (
-        student_id INTEGER,
-        student_name TEXT NOT NULL,
-        module TEXT NOT NULL,
-        average_score REAL,
-        assessments_completed INTEGER,
-        performance_trend REAL,
-        max_consecutive_misses INTEGER,
-        progress_in_semester FLOAT,
-        PRIMARY KEY (student_id)
-        FOREIGN KEY (module) REFERENCES modules (module_id)
-    );'''
+sqlCommands = sqlFile.split(';')
+for command in sqlCommands:
+    try:
+        cursor_obj.execute(command)
+    except sqlite3.OperationalError as msg:
+        print("Command skipped: ", msg)
 
-create_risk_score_table = '''
-    CREATE TABLE IF NOT EXISTS risk_scores (
-        student_id INTEGER,
-        student_name TEXT NOT NULL,
-        module TEXT NOT NULL,
-        risk_score REAL,
-        PRIMARY KEY (student_id, module)
-    );'''
-
-create_lecturers_table = '''
-    CREATE TABLE IF NOT EXISTS lecturers (
-        email TEXT PRIMARY KEY,
-        lecturer_name TEXT NOT NULL,
-        password_hash TEXT NOT NULL
-    );'''
-
-create_modules_table = '''
-    CREATE TABLE IF NOT EXISTS modules (
-        module_code TEXT PRIMARY KEY,
-        module_name TEXT NOT NULL,
-        lecturer_email INTEGER,
-        assessment_count INTEGER NOT NULL,
-        FOREIGN KEY (lecturer_email) REFERENCES lecturers (email)
-    );'''
-
-
-cursor_obj.execute(create_grade_table)
 print("Grades table created successfully")
-cursor_obj.execute(create_student_table)
+
+
+# Create Students Table
+fd = open('SQL Scripts/students.sql', 'r')
+sqlFile = fd.read()
+fd.close()
+
+sqlCommands = sqlFile.split(';')
+for command in sqlCommands:
+    try:
+        cursor_obj.execute(command)
+    except sqlite3.OperationalError as msg:
+        print("Command skipped: ", msg)
+
 print("Students table created successfully")
-cursor_obj.execute(create_risk_score_table)
+
+# Create Risk Scores Table
+fd = open('SQL Scripts/risk_scores.sql', 'r')
+sqlFile = fd.read()
+fd.close()
+
+sqlCommands = sqlFile.split(';')
+for command in sqlCommands:
+    try:
+        cursor_obj.execute(command)
+    except sqlite3.OperationalError as msg:
+        print("Command skipped: ", msg)
+
 print("Risk Scores table created successfully")
-cursor_obj.execute(create_lecturers_table)
+
+# Create Lecturers Table
+fd = open('SQL Scripts/lecturers.sql', 'r')
+sqlFile = fd.read()
+fd.close()
+
+sqlCommands = sqlFile.split(';')
+for command in sqlCommands:
+    try:
+        cursor_obj.execute(command)
+    except sqlite3.OperationalError as msg:
+        print("Command skipped: ", msg)
+
 print("Lecturers table created successfully")
-cursor_obj.execute(create_modules_table)
+
+# Create Modules Table
+fd = open('SQL Scripts/modules.sql', 'r')
+sqlFile = fd.read()
+fd.close()
+
+sqlCommands = sqlFile.split(';')
+for command in sqlCommands:
+    try:
+        cursor_obj.execute(command)
+    except sqlite3.OperationalError as msg:
+        print("Command skipped: ", msg)
+
 print("Modules table created successfully")
 
-
-# cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (1, 'Adam', 'CS161', 45)")
-# cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (2, 'Daniel', 'CS161', 5)")
-# cursor_obj.execute("INSERT INTO risk_scores (student_id, student_name, module, risk_score) VALUES (3, 'Luke', 'CS162', 90.0)")
-#
-# print("Data Inserted in the table: ")
-# cursor_obj.execute("SELECT * FROM risk_scores")
-# print(cursor_obj.fetchall())
 
 connection_obj.commit()
 connection_obj.close()
