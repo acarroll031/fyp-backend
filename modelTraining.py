@@ -161,11 +161,11 @@ def train_knn_model(file_root_1, file_root_2, progress_threshold):
 #     progress_threshold = str(i / 10)
 #     train_model(file_root="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_", progress_threshold=progress_threshold)
 
-train_knn_model(
-    file_root_1="trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_",
-    file_root_2="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_" ,
-    progress_threshold="0.1-1.0"
-)
+# train_knn_model(
+#     file_root_1="trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_",
+#     file_root_2="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_" ,
+#     progress_threshold="0.1-1.0"
+# )
 
 train_model(
     file_root_1="trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_",
