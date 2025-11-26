@@ -1,10 +1,9 @@
-import csv
 import io
 from contextlib import asynccontextmanager
 from dataProcessing import convert_grades_to_students
 
 import pandas as pd
-from fastapi import FastAPI, Request, Response, Depends, UploadFile, File, HTTPException, status
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, status
 import joblib
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,11 +65,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-origins = [
-    "http://localhost",
-    "http://localhost:5173",
-    "http://localhost:8000"
-]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
