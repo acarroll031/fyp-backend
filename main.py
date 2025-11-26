@@ -18,6 +18,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from sqlalchemy import create_engine
+from sqlalchemy import text
 
 def get_db_connection():
     db_url = os.getenv("DATABASE_URL")
@@ -135,6 +136,7 @@ def get_students(current_user_email: str = Depends(get_current_user)):
 
     return rows
 
+
 @app.post("/students/{module_id}/grades")
 async def post_grades(
         module_id: str,
@@ -143,11 +145,14 @@ async def post_grades(
         model=Depends(get_model)
 ):
     db_url = os.getenv("DATABASE_URL")
-    if db_url.startswith("postgres://"):
+    if db_url and db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     engine = create_engine(db_url)
     connection = engine.connect()
+
+    raw_conn = get_db_connection()
+    cursor = raw_conn.cursor()
 
     try:
         contents = await file.read()
@@ -155,57 +160,93 @@ async def post_grades(
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
 
-        grades_df.to_sql("grades", con=connection, if_exists="append", index=False, method="multi", chunksize=1000)
+        grades_data = grades_df.to_dict(orient='records')
 
-        total_grades_df = pd.read_sql_query("SELECT * FROM grades", engine)
+        upsert_query = """
+                       INSERT INTO grades (student_id, student_name, assessment_number, score, module, 
+                                           progress_in_semester)
+                       VALUES (%(student_id)s, %(student_name)s, %(assessment_number)s, %(score)s, %(module)s, 
+                               %(progress_in_semester)s) ON CONFLICT (student_id, module, assessment_number)
+            DO 
+                       UPDATE SET
+                           score = EXCLUDED.score, 
+                           progress_in_semester = EXCLUDED.progress_in_semester, 
+                           student_name = EXCLUDED.student_name; 
+                       """
+        cursor.executemany(upsert_query, grades_data)
+        raw_conn.commit()
+
+        total_grades_df = pd.read_sql_query(
+            "SELECT * FROM grades WHERE module = %s",
+            engine,
+            params=(module_id,)
+        )
 
         student_df = convert_grades_to_students(total_grades_df)
-        print("student_df: ", student_df.head())
 
-        delete_student_query = "DELETE FROM students WHERE module = %s"
-        raw_conn = get_db_connection()
-        cur = raw_conn.cursor()
-        cur.execute(delete_student_query, (module_id,))
+        student_data = student_df.to_dict(orient='records')
+
+        upsert_query = """
+                       INSERT INTO students (student_id, student_name, module, average_score, assessments_completed, 
+                                             performance_trend, max_consecutive_misses, progress_in_semester)
+                       VALUES (%(student_id)s, %(student_name)s, %(module)s, %(average_score)s, %(assessments_completed)s, 
+                               %(performance_trend)s, %(max_consecutive_misses)s, %(progress_in_semester)s)
+            ON CONFLICT (student_id)
+            DO 
+                       UPDATE SET
+                           module = EXCLUDED.module,
+                           average_score = EXCLUDED.average_score, 
+                           assessments_completed = EXCLUDED.assessments_completed,
+                           performance_trend = EXCLUDED.performance_trend,
+                           max_consecutive_misses = EXCLUDED.max_consecutive_misses,
+                           progress_in_semester = EXCLUDED.progress_in_semester,
+                           student_name = EXCLUDED.student_name;
+                       """
+        cursor.executemany(upsert_query, student_data)
         raw_conn.commit()
-        raw_conn.close()
-
-        student_df.to_sql("students", engine, if_exists="append", index=False)
 
         features = student_df[[
             "average_score",
             "assessments_completed",
             "performance_trend",
-            "max_consecutive_misses",
-            "progress_in_semester"
-        ]].values
+            "progress_in_semester",
+            "max_consecutive_misses"
+        ]]
+
         risk_scores = model.predict(features)
         student_df["risk_score"] = risk_scores
-        print("student_df: ",student_df.head())
+
         risk_scores_df = student_df[[
             "student_id",
             "student_name",
             "module",
             "risk_score"
-        ]]
+        ]].copy()
         risk_scores_df['risk_score'] = risk_scores_df['risk_score'].round(2)
-        print("risk_scores_df: ",risk_scores_df.head())
 
-        delete_student_query = "DELETE FROM risk_scores WHERE module = %s"
-        raw_conn = get_db_connection()
-        cur = raw_conn.cursor()
-        cur.execute(delete_student_query, (module_id,))
+        risk_scores_data = risk_scores_df.to_dict(orient='records')
+
+        upsert_query = """
+                       INSERT INTO risk_scores (student_id, student_name, module, risk_score)
+                       VALUES (%(student_id)s, %(student_name)s, %(module)s, %(risk_score)s)
+            ON CONFLICT (student_id, module)
+            DO 
+                       UPDATE SET
+                           risk_score = EXCLUDED.risk_score,
+                           student_name = EXCLUDED.student_name;
+                       """
+        cursor.executemany(upsert_query, risk_scores_data)
         raw_conn.commit()
-        raw_conn.close()
 
-        risk_scores_df.to_sql("risk_scores", engine, if_exists="append", index=False)
-
-
-        return {"message": "Grades inserted successfully"}
+        return {"message": "Grades inserted and risk scores updated successfully"}
 
     except Exception as e:
+        raw_conn.rollback()
         raise e
     finally:
         connection.close()
+        cursor.close()
+        raw_conn.close()
 
 class LecturerCreate(BaseModel):
     email: str
