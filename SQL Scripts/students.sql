@@ -4,7 +4,7 @@ create table students
         primary key,
     student_name           TEXT not null,
     module                 TEXT not null
-        references modules (module_id),
+        references modules (module_code),
     average_score          REAL,
     assessments_completed  INTEGER,
     performance_trend      REAL,

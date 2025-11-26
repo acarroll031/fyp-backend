@@ -7,13 +7,25 @@ from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, status
 import joblib
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-import sqlite3
 
 from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
 import jwt # For the tokens
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from sqlalchemy import create_engine
+
+def get_db_connection():
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL is not set")
+
+    conn = psycopg2.connect(db_url)
+    return conn
 
 SECRET_KEY = "secret"
 ALGORITHM = "HS256"
@@ -107,23 +119,21 @@ def predict_risk(
 
 @app.get("/students")
 def get_students(current_user_email: str = Depends(get_current_user)):
-    connection = sqlite3.connect("fyp_database.db")
-    connection.row_factory = sqlite3.Row
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     query="""
         SELECT s.student_id, s.student_name, s.module, s.risk_score
         FROM risk_scores s
         JOIN modules m ON s.module = m.module_code
-        WHERE m.lecturer_email = ?
+        WHERE m.lecturer_email = %s
     """
 
     cursor.execute(query , (current_user_email,))
     rows = cursor.fetchall()
     connection.close()
 
-    students = [dict(row) for row in rows]
-    return students
+    return rows
 
 @app.post("/students/{module_id}/grades")
 async def post_grades(
@@ -132,44 +142,34 @@ async def post_grades(
         file: UploadFile = File(...),
         model=Depends(get_model)
 ):
-    connection = sqlite3.connect("fyp_database.db", timeout=10.0)
-    cursor = connection.cursor()
+    db_url = os.getenv("DATABASE_URL")
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    engine = create_engine(db_url)
+    connection = engine.connect()
 
     try:
         contents = await file.read()
         grades_df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
-        print("grades_df: ",grades_df.head())
 
-        grade_cols = [
-            'student_id', 'student_name', 'assessment_number',
-            'score', 'module', 'progress_in_semester'
-        ]
-        grades_data = grades_df[grade_cols].to_records(index=False).tolist()
-        cursor.executemany("""
-                    INSERT OR REPLACE INTO grades (
-                        student_id, student_name, assessment_number, 
-                        score, module, progress_in_semester
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, grades_data)
-        connection.commit()
+        grades_df.to_sql("grades", con=connection, if_exists="append", index=False, method="multi", chunksize=1000)
 
-        total_grades_df = pd.read_sql_query("SELECT * FROM grades", connection)
-        print("total_grades_df: ",total_grades_df.head())
+        total_grades_df = pd.read_sql_query("SELECT * FROM grades", engine)
 
         student_df = convert_grades_to_students(total_grades_df)
         print("student_df: ", student_df.head())
 
-        student_data = student_df.to_records(index=False).tolist()
-        cursor.executemany('''
-            INSERT OR REPLACE INTO students (
-                student_id, student_name, module, average_score, assessments_completed, performance_trend, max_consecutive_misses, progress_in_semester
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', student_data)
-        connection.commit()
+        delete_student_query = "DELETE FROM students WHERE module = %s"
+        raw_conn = get_db_connection()
+        cur = raw_conn.cursor()
+        cur.execute(delete_student_query, (module_id,))
+        raw_conn.commit()
+        raw_conn.close()
+
+        student_df.to_sql("students", engine, if_exists="append", index=False)
 
         features = student_df[[
             "average_score",
@@ -189,17 +189,20 @@ async def post_grades(
         ]]
         risk_scores_df['risk_score'] = risk_scores_df['risk_score'].round(2)
         print("risk_scores_df: ",risk_scores_df.head())
-        risk_data = risk_scores_df.to_records(index=False).tolist()
-        cursor.executemany('''
-            INSERT OR REPLACE INTO risk_scores (student_id, student_name, module, risk_score)
-            VALUES (?, ?, ?, ?)
-        ''', risk_data)
-        connection.commit()
+
+        delete_student_query = "DELETE FROM risk_scores WHERE module = %s"
+        raw_conn = get_db_connection()
+        cur = raw_conn.cursor()
+        cur.execute(delete_student_query, (module_id,))
+        raw_conn.commit()
+        raw_conn.close()
+
+        risk_scores_df.to_sql("risk_scores", engine, if_exists="append", index=False)
+
 
         return {"message": "Grades inserted successfully"}
 
     except Exception as e:
-        connection.rollback()
         raise e
     finally:
         connection.close()
@@ -215,19 +218,20 @@ class Token(BaseModel):
 
 @app.post("/register")
 def register_lecturer(lecturer: LecturerCreate):
-    connection = sqlite3.connect("fyp_database.db")
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     hashed_password = get_password_hash(lecturer.password)
 
     try:
         cursor.execute("""
             INSERT INTO lecturers (email, password_hash, lecturer_name)
-            VALUES (?, ?, ?)
+            VALUES (%s,%s ,%s)
         """, (lecturer.email, hashed_password, lecturer.lecturer_name)
         )
         connection.commit()
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
+        connection.rollback()
         raise HTTPException(status_code=400, detail="Email already registered")
     finally:
         connection.close()
@@ -236,11 +240,10 @@ def register_lecturer(lecturer: LecturerCreate):
 
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    connection = sqlite3.connect("fyp_database.db")
-    connection.row_factory = sqlite3.Row
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
-    cursor.execute(""" SELECT * FROM lecturers WHERE email = ?""", (form_data.username, ))
+    cursor.execute(""" SELECT * FROM lecturers WHERE email = %s""", (form_data.username, ))
     lecturer = cursor.fetchone()
     connection.close()
 
@@ -270,16 +273,17 @@ def create_module(
         module: ModuleCreate,
         current_user: str = Depends(get_current_user)
 ):
-    connection = sqlite3.connect("fyp_database.db")
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
         cursor.execute("""
-            INSERT INTO modules (module_name, module_code, assessment_count, lecturer_email) VALUES (?, ?, ?, ?)
+            INSERT INTO modules (module_name, module_code, assessment_count, lecturer_email) VALUES (%s, %s, %s, %s)
         """,
          (module.module_name, module.module_code, module.assessment_count, current_user))
         connection.commit()
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
+        connection.rollback()
         raise HTTPException(status_code=400, detail="Module code already exists")
     finally:
         connection.close()
@@ -290,19 +294,18 @@ def create_module(
 def get_modules(
         current_user_email: str = Depends(get_current_user)
 ):
-    connection = sqlite3.connect("fyp_database.db")
-    connection.row_factory = sqlite3.Row
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("""
         SELECT * 
         FROM modules 
-        WHERE lecturer_email = ?
+        WHERE lecturer_email = %s
     """, (current_user_email,))
     modules = cursor.fetchall()
     connection.close()
 
-    return [dict(row) for row in modules]
+    return modules
 
 @app.put("/modules/{module_code}")
 def update_module(
@@ -310,22 +313,22 @@ def update_module(
         module_update: ModuleUpdate,
         current_user_email: str = Depends(get_current_user)
 ):
-    connection = sqlite3.connect("fyp_database.db")
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("""
         SELECT * 
         FROM modules 
-        WHERE module_code = ? AND lecturer_email = ?
+        WHERE module_code = ? AND lecturer_email = %s
     """, (module_code, current_user_email))
     if not cursor.fetchone():
         connection.close()
         raise HTTPException(status_code=404, detail="Module not found or access denied")
 
     if module_update.module_name:
-        cursor.execute(""" UPDATE modules SET module_name = ? WHERE module_code = ? """, (module_update.module_name, module_code))
+        cursor.execute(""" UPDATE modules SET module_name = ? WHERE module_code = %s """, (module_update.module_name, module_code))
     if module_update.assessment_count:
-        cursor.execute(""" UPDATE modules SET assessment_count = ? WHERE module_code = ? """, (module_update.assessment_count, module_code))
+        cursor.execute(""" UPDATE modules SET assessment_count = ? WHERE module_code = %s """, (module_update.assessment_count, module_code))
 
     connection.commit()
     connection.close()
@@ -336,19 +339,19 @@ def delete_module(
         module_code: str,
         current_user_email: str = Depends(get_current_user)
 ):
-    connection = sqlite3.connect("fyp_database.db")
-    cursor = connection.cursor()
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("""
         SELECT * 
         FROM modules 
-        WHERE module_code = ? AND lecturer_email = ?
+        WHERE module_code = %s AND lecturer_email = %s
     """, (module_code, current_user_email))
     if not cursor.fetchone():
         connection.close()
         raise HTTPException(status_code=404, detail="Module not found or access denied")
 
-    cursor.execute(""" DELETE FROM modules WHERE module_code = ? """, (module_code,))
+    cursor.execute(""" DELETE FROM modules WHERE module_code = %s """, (module_code,))
     connection.commit()
     connection.close()
     return {"message": f"Module {module_code} deleted successfully"}

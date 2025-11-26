@@ -3,7 +3,7 @@ create table modules
     module_code      TEXT
         primary key,
     module_name      TEXT    not null,
-    lecturer_email   INTEGER
+    lecturer_email   TEXT
         references lecturers,
     assessment_count INTEGER not null
 );
