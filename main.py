@@ -20,6 +20,11 @@ from psycopg2.extras import RealDictCursor
 from sqlalchemy import create_engine
 from sqlalchemy import text
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 def get_db_connection():
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
