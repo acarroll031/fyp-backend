@@ -142,6 +142,41 @@ def get_students(current_user_email: str = Depends(get_current_user)):
     return rows
 
 
+@app.get("/students/{student_id}")
+def get_student_details(student_id: str, current_user_email: str = Depends(get_current_user)):
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute("""
+                       SELECT s.*, r.risk_score
+                       FROM students s
+                        JOIN modules m ON s.module = m.module_code
+                        JOIN risk_scores r ON s.student_id = r.student_id AND s.module = r.module
+                       WHERE s.student_id = %s
+                         AND m.lecturer_email = %s
+                       """, (student_id, current_user_email))
+
+        student = cursor.fetchone()
+
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found or access denied")
+
+        cursor.execute("""
+                       SELECT assessment_number, score, progress_in_semester
+                       FROM grades
+                       WHERE student_id = %s
+                         AND module = %s
+                       ORDER BY assessment_number ASC
+                       """, (student_id, student['module']))
+
+        grades = cursor.fetchall()
+
+        return {"student": student, "grades": grades}
+
+    finally:
+        connection.close()
+
 @app.post("/students/{module_id}/grades")
 async def post_grades(
         module_id: str,
