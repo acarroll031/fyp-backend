@@ -227,9 +227,9 @@ async def post_grades(
         student_data = student_df.to_dict(orient='records')
 
         upsert_query = """
-                       INSERT INTO students (student_id, student_name, module, average_score, assessments_completed, 
+                       INSERT INTO students (student_id, student_name, email, module, average_score, assessments_completed, 
                                              performance_trend, max_consecutive_misses, progress_in_semester)
-                       VALUES (%(student_id)s, %(student_name)s, %(module)s, %(average_score)s, %(assessments_completed)s, 
+                       VALUES (%(student_id)s, %(student_name)s, %(email)s, %(module)s, %(average_score)s, %(assessments_completed)s, 
                                %(performance_trend)s, %(max_consecutive_misses)s, %(progress_in_semester)s)
             ON CONFLICT (student_id)
             DO 
@@ -240,7 +240,8 @@ async def post_grades(
                            performance_trend = EXCLUDED.performance_trend,
                            max_consecutive_misses = EXCLUDED.max_consecutive_misses,
                            progress_in_semester = EXCLUDED.progress_in_semester,
-                           student_name = EXCLUDED.student_name;
+                           student_name = EXCLUDED.student_name,
+                           email = EXCLUDED.email;
                        """
         cursor.executemany(upsert_query, student_data)
         raw_conn.commit()
