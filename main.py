@@ -141,6 +141,45 @@ def get_students(current_user_email: str = Depends(get_current_user)):
 
     return rows
 
+@app.get("/students/{student_id}/{module_id}")
+def get_student_details_by_module(student_id: str, module_id: str, current_user_email: str = Depends(get_current_user)):
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        print(f"Looking for student_id={student_id}, module_id={module_id}, lecturer={current_user_email}")
+
+        cursor.execute("""
+                       SELECT s.*, r.risk_score
+                       FROM students s
+                        JOIN modules m ON s.module = m.module_code
+                        JOIN risk_scores r ON s.student_id = r.student_id AND s.module = r.module
+                       WHERE s.student_id = %s
+                            AND s.module = %s
+                         AND m.lecturer_email = %s
+                       """, (student_id, module_id , current_user_email))
+
+        student = cursor.fetchone()
+        print(f"Query result: {student}")
+
+
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found or access denied")
+
+        cursor.execute("""
+                       SELECT assessment_number, score, progress_in_semester
+                       FROM grades
+                       WHERE student_id = %s
+                         AND module = %s
+                       ORDER BY assessment_number
+                       """, (student_id, module_id))
+
+        grades = cursor.fetchall()
+
+        return {"student": student, "grades": grades}
+
+    finally:
+        connection.close()
 
 @app.get("/students/{student_id}")
 def get_student_details(student_id: str, current_user_email: str = Depends(get_current_user)):
@@ -177,6 +216,8 @@ def get_student_details(student_id: str, current_user_email: str = Depends(get_c
     finally:
         connection.close()
 
+
+
 @app.post("/students/{module_id}/grades")
 async def post_grades(
         module_id: str,
@@ -199,7 +240,8 @@ async def post_grades(
         grades_df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
-
+        # Create an email mapping to preserve emails to add back in later
+        email_mapping = grades_df[["student_id", "email"]].drop_duplicates()
         grades_data = grades_df.to_dict(orient='records')
 
         upsert_query = """
@@ -222,7 +264,11 @@ async def post_grades(
             params=(module_id,)
         )
 
+        # Convert all grades to student summaries with features for ML model
         student_df = convert_grades_to_students(total_grades_df)
+
+        # Add emails back in
+        student_df = student_df.merge(email_mapping, on=["student_id"], how="left")
 
         student_data = student_df.to_dict(orient='records')
 
@@ -231,10 +277,9 @@ async def post_grades(
                                              performance_trend, max_consecutive_misses, progress_in_semester)
                        VALUES (%(student_id)s, %(student_name)s, %(email)s, %(module)s, %(average_score)s, %(assessments_completed)s, 
                                %(performance_trend)s, %(max_consecutive_misses)s, %(progress_in_semester)s)
-            ON CONFLICT (student_id)
+            ON CONFLICT (student_id, module)
             DO 
                        UPDATE SET
-                           module = EXCLUDED.module,
                            average_score = EXCLUDED.average_score, 
                            assessments_completed = EXCLUDED.assessments_completed,
                            performance_trend = EXCLUDED.performance_trend,

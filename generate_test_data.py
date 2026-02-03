@@ -11,6 +11,7 @@ def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate
     # 1. Load students
     df_source = pd.read_csv(source_file)
     students_base = df_source[['student_id', 'student_name']].drop_duplicates()
+    students_base['email'] = 'student' + students_base['student_id'].astype(str) + '@mumail.ie'
 
     print(f"Generating files with a {int(missing_rate * 100)}% missing rate...")
 
@@ -33,7 +34,7 @@ def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate
         df_current['score'] = np.round(scores, 2)
 
         # 4. Save
-        filename = f'assessment_{i}.csv'
+        filename = f'Sample Assessment CSVs/assessment_{i}.csv'
         df_current.to_csv(filename, index=False)
 
         # Optional: Print how many missed this specific assessment
