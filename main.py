@@ -176,7 +176,17 @@ def get_student_details_by_module(student_id: str, module_id: str, current_user_
 
         grades = cursor.fetchall()
 
-        return {"student": student, "grades": grades}
+        cursor.execute("""
+                       SELECT risk_score as risk_score_history, recorded_at as risk_score_history_timestamp
+                       FROM risk_history
+                       WHERE student_id = %s
+                         AND module = %s
+                       ORDER BY recorded_at ASC
+                       """, (student_id, module_id))
+
+        risk_history = cursor.fetchall()
+
+        return {"student": student, "grades": grades, "risk_history": risk_history}
 
     finally:
         connection.close()
