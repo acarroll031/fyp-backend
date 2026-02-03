@@ -291,6 +291,7 @@ async def post_grades(
         cursor.executemany(upsert_query, student_data)
         raw_conn.commit()
 
+        # Ensure features have the correct name and order for the model
         features = student_df[[
             "average_score",
             "assessments_completed",
@@ -299,27 +300,53 @@ async def post_grades(
             "max_consecutive_misses"
         ]]
 
+        # Fetch existing risk scores for comparison
+        existing_scores_query = "SELECT student_id, risk_score FROM risk_scores WHERE module = %s"
+        existing_scores_df = pd.read_sql_query(existing_scores_query, engine, params=(module_id,))
+
+        # Rename column to avoid confusion
+        existing_scores_df = existing_scores_df.rename(columns={"risk_score": "previous_risk_score"})
+
+        # Predict new risk scores using the ML model
         risk_scores = model.predict(features)
         student_df["risk_score"] = risk_scores
 
+        # Merge the previous scores into our main dataframe
+        student_df = pd.merge(student_df, existing_scores_df, on="student_id", how="left")
+        # Fill NaN (new students have no history) with 0 or the current score
+        student_df["previous_risk_score"] = student_df["previous_risk_score"].fillna(0)
+
+        # Create a new dataframe for inserting into risk_scores
         risk_scores_df = student_df[[
             "student_id",
             "student_name",
             "module",
-            "risk_score"
+            "risk_score",
+            "previous_risk_score"
         ]].copy()
+        # Round risk scores to 2 decimal places for readability
         risk_scores_df['risk_score'] = risk_scores_df['risk_score'].round(2)
-
+        # Convert to list of dicts for insertion
         risk_scores_data = risk_scores_df.to_dict(orient='records')
 
+        # Insert into risk_history table for tracking over time
+        history_query = """
+                        INSERT INTO risk_history (student_id, student_name, module_code, risk_score)
+                        VALUES (%(student_id)s, %(student_name)s, %(module)s, %(risk_score)s) \
+                        """
+        cursor.executemany(history_query, risk_scores_data)
+        raw_conn.commit()
+
+        # Upsert into risk_scores table
         upsert_query = """
-                       INSERT INTO risk_scores (student_id, student_name, module, risk_score)
-                       VALUES (%(student_id)s, %(student_name)s, %(module)s, %(risk_score)s)
+                       INSERT INTO risk_scores (student_id, student_name, module, risk_score, previous_risk_score)
+                       VALUES (%(student_id)s, %(student_name)s, %(module)s, %(risk_score)s, %(previous_risk_score)s)
             ON CONFLICT (student_id, module)
             DO 
                        UPDATE SET
                            risk_score = EXCLUDED.risk_score,
-                           student_name = EXCLUDED.student_name;
+                           student_name = EXCLUDED.student_name,
+                           previous_risk_score = EXCLUDED.previous_risk_score;
                        """
         cursor.executemany(upsert_query, risk_scores_data)
         raw_conn.commit()
