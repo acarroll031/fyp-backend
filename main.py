@@ -341,7 +341,7 @@ async def post_grades(
 
         # Insert into risk_history table for tracking over time
         history_query = """
-                        INSERT INTO risk_history (student_id, student_name, module_code, risk_score)
+                        INSERT INTO risk_history (student_id, student_name, module, risk_score)
                         VALUES (%(student_id)s, %(student_name)s, %(module)s, %(risk_score)s) \
                         """
         cursor.executemany(history_query, risk_scores_data)
