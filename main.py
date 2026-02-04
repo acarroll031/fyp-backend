@@ -1,66 +1,82 @@
 import io
-from contextlib import asynccontextmanager
-from dataProcessing import convert_grades_to_students
-
-import pandas as pd
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, status
+import os
+import bcrypt
 import joblib
-from pydantic import BaseModel
+import jwt  # For the tokens
+import pandas as pd
+import psycopg2
+from dotenv import load_dotenv
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from psycopg2.extras import RealDictCursor
+from pydantic import BaseModel
+from sqlalchemy import create_engine
+from dataProcessing import convert_grades_to_students
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional
-import bcrypt
-import jwt # For the tokens
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from sqlalchemy import create_engine
-from sqlalchemy import text
-
-from dotenv import load_dotenv
 
 load_dotenv()
 
-
+# Database connection
 def get_db_connection():
-    db_url = os.getenv("DATABASE_URL")
+    db_url = os.getenv("DATABASE_URL") # Get the database URL from environment variable
     if not db_url:
-        raise ValueError("DATABASE_URL is not set")
+        raise ValueError("DATABASE_URL is not set") # Catch missing env variable
 
-    conn = psycopg2.connect(db_url)
+    conn = psycopg2.connect(db_url) # Connect to the PostgreSQL database
     return conn
 
-SECRET_KEY = "secret"
+SECRET_KEY = "secret" # In production, use a secure method to store this
 ALGORITHM = "HS256"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token") # Setup OAuth2 for token handling
 
 def get_password_hash(password: str) -> str:
-
+    """
+    Hash a password for storing.
+    :param password: The plain password to hash
+    :return: The hashed password
+    """
     pwd_bytes = password.encode('utf-8')
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(pwd_bytes, salt)
     return hashed.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a stored password against one provided by user
+    :param plain_password: The plain password to verify
+    :param hashed_password: The stored hashed password
+    :return: Boolean indicating if the password matches
+    """
     password_byte_encoded = plain_password.encode('utf-8')
     hashed_byte_encoded = hashed_password.encode('utf-8')
     return bcrypt.checkpw(password_byte_encoded, hashed_byte_encoded)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """
+    Create a JWT access token.
+    :param data: The data to encode in the token
+    :param expires_delta: The time delta for token expiration
+    :return: An encoded JWT token
+    """
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """
+    Decode the JWT token to get the current user.
+    :param token: The JWT token
+    :return: The email of the current user
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -75,16 +91,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return email
 
+# FastAPI app with lifespan event to load the model
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """" Load the ML model at startup and unload at shutdown """
     app.state.model = joblib.load("student_risk_model_0.1-1.0.joblib")
     yield
     app.state.model = None
 
+# Create FastAPI app
 app = FastAPI(lifespan=lifespan)
 
+# CORS middleware setup
 origins = ["*"]
 
+# Allow CORS for all origins (adjust in production)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -93,26 +114,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def get_model():
+    """ Dependency to get the ML model """
     return app.state.model
 
 class PredictRequest(BaseModel):
+    """ Input features for predicting student risk score """
     average_score: float
     assessments_completed: int
     performance_trend: float
     max_consecutive_misses: int
     progress_in_semester: float
 
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello, World!"}
-
-@app.post("/predict")
+@app.post("/predict", summary="Predict Student Risk Score", description="Predict the risk score of a student based on their performance features.")
 def predict_risk(
         request: PredictRequest,
         model=Depends(get_model)
 ):
+    """
+    Predict the risk score for a student based on input features.
+    :param request: PredictRequest containing student features
+    :param model: The ML model for prediction
+    :return: Predicted risk score
+    """
+    # Reshape input for model as 2D array as required by scikit-learn
     features = [[
         request.average_score,
         request.assessments_completed,
@@ -123,11 +149,17 @@ def predict_risk(
     risk_score = model.predict(features)
     return {"risk_score": risk_score[0]}
 
-@app.get("/students")
+@app.get("/students", summary="Get Students for Lecturer", description="Retrieve a list of students associated with the logged-in lecturer.")
 def get_students(current_user_email: str = Depends(get_current_user)):
+    """
+    Get a list of students for the logged-in lecturer.
+    :param current_user_email: The email of the current logged-in lecturer
+    :return: List of students with their risk scores
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    # SQL query to fetch students associated with the lecturer
     query="""
         SELECT s.student_id, s.student_name, s.module, s.risk_score
         FROM risk_scores s
@@ -141,14 +173,20 @@ def get_students(current_user_email: str = Depends(get_current_user)):
 
     return rows
 
-@app.get("/students/{student_id}/{module_id}")
+@app.get("/students/{student_id}/{module_id}", summary="Get Student Details by Module", description="Retrieve detailed information about a specific student for a specific module, including grades and risk history.")
 def get_student_details_by_module(student_id: str, module_id: str, current_user_email: str = Depends(get_current_user)):
+    """
+    Get detailed information about a specific student for a specific module
+    :param student_id: ID of the student
+    :param module_id: ID of the module
+    :param current_user_email: Email of the current logged-in lecturer
+    :return: Student details, grades, and risk history as a JSON object with three keys: "student", "grades", and "risk_history"
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
-        print(f"Looking for student_id={student_id}, module_id={module_id}, lecturer={current_user_email}")
-
+        # SQL query to fetch student details
         cursor.execute("""
                        SELECT s.*, r.risk_score
                        FROM students s
@@ -160,12 +198,12 @@ def get_student_details_by_module(student_id: str, module_id: str, current_user_
                        """, (student_id, module_id , current_user_email))
 
         student = cursor.fetchone()
-        print(f"Query result: {student}")
 
-
+        # If no student found, raise 404 error
         if not student:
             raise HTTPException(status_code=404, detail="Student not found or access denied")
 
+        # SQL query to fetch grades
         cursor.execute("""
                        SELECT assessment_number, score, progress_in_semester
                        FROM grades
@@ -176,6 +214,7 @@ def get_student_details_by_module(student_id: str, module_id: str, current_user_
 
         grades = cursor.fetchall()
 
+        # SQL query to fetch risk history
         cursor.execute("""
                        SELECT risk_score as risk_score_history, recorded_at as risk_score_history_timestamp
                        FROM risk_history
@@ -191,53 +230,24 @@ def get_student_details_by_module(student_id: str, module_id: str, current_user_
     finally:
         connection.close()
 
-@app.get("/students/{student_id}")
-def get_student_details(student_id: str, current_user_email: str = Depends(get_current_user)):
-    connection = get_db_connection()
-    cursor = connection.cursor(cursor_factory=RealDictCursor)
-
-    try:
-        cursor.execute("""
-                       SELECT s.*, r.risk_score
-                       FROM students s
-                        JOIN modules m ON s.module = m.module_code
-                        JOIN risk_scores r ON s.student_id = r.student_id AND s.module = r.module
-                       WHERE s.student_id = %s
-                         AND m.lecturer_email = %s
-                       """, (student_id, current_user_email))
-
-        student = cursor.fetchone()
-
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found or access denied")
-
-        cursor.execute("""
-                       SELECT assessment_number, score, progress_in_semester
-                       FROM grades
-                       WHERE student_id = %s
-                         AND module = %s
-                       ORDER BY assessment_number ASC
-                       """, (student_id, student['module']))
-
-        grades = cursor.fetchall()
-
-        return {"student": student, "grades": grades}
-
-    finally:
-        connection.close()
-
-
-
-@app.post("/students/{module_id}/grades")
+@app.post("/students/{module_id}/grades", summary="Upload Grades and Update Risk Scores", description="Upload a CSV file containing student grades for a specific module, update the grades in the database, and recalculate risk scores using the ML model.")
 async def post_grades(
         module_id: str,
         progress_in_semester: float,
         file: UploadFile = File(...),
         model=Depends(get_model)
 ):
+    """
+    Upload grades CSV, update grades, and recalculate risk scores.
+    :param module_id: ID of the module
+    :param progress_in_semester: Value indicating progress in the semester from 0.0 to 1.0
+    :param file: CSV file containing grades
+    :param model: ML model for risk score prediction
+    :return: Success message
+    """
     db_url = os.getenv("DATABASE_URL")
     if db_url and db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql://", 1)
+        db_url = db_url.replace("postgres://", "postgresql://", 1) # SQLAlchemy requires 'postgresql://'
 
     engine = create_engine(db_url)
     connection = engine.connect()
@@ -247,13 +257,15 @@ async def post_grades(
 
     try:
         contents = await file.read()
-        grades_df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
+        grades_df = pd.read_csv(io.StringIO(contents.decode("utf-8"))) # Read CSV into DataFrame
+        # Add module and progress columns
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
         # Create an email mapping to preserve emails to add back in later
         email_mapping = grades_df[["student_id", "email"]].drop_duplicates()
         grades_data = grades_df.to_dict(orient='records')
 
+        # SQL query to upsert grades
         upsert_query = """
                        INSERT INTO grades (student_id, student_name, assessment_number, score, module, 
                                            progress_in_semester)
@@ -268,6 +280,7 @@ async def post_grades(
         cursor.executemany(upsert_query, grades_data)
         raw_conn.commit()
 
+        # Fetch all grades for the module to recalculate student summaries
         total_grades_df = pd.read_sql_query(
             "SELECT * FROM grades WHERE module = %s",
             engine,
@@ -280,8 +293,10 @@ async def post_grades(
         # Add emails back in
         student_df = student_df.merge(email_mapping, on=["student_id"], how="left")
 
+        # Convert student summaries to list of dicts for insertion
         student_data = student_df.to_dict(orient='records')
 
+        # SQL query to upsert student summaries
         upsert_query = """
                        INSERT INTO students (student_id, student_name, email, module, average_score, assessments_completed, 
                                              performance_trend, max_consecutive_misses, progress_in_semester)
@@ -372,22 +387,30 @@ async def post_grades(
         raw_conn.close()
 
 class LecturerCreate(BaseModel):
+    """ Model for creating a new lecturer """
     email: str
     password: str
     lecturer_name: str
 
 class Token(BaseModel):
+    """ Model for JWT token response """
     access_token: str
     token_type: str
 
-@app.post("/register")
+@app.post("/register", summary="Register Lecturer", description="Register a new lecturer with email, password, and name.")
 def register_lecturer(lecturer: LecturerCreate):
+    """
+    Register a new lecturer.
+    :param lecturer: LecturerCreate object containing email, password, and name
+    :return: Success message
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     hashed_password = get_password_hash(lecturer.password)
 
     try:
+        # Insert new lecturer into the database
         cursor.execute("""
             INSERT INTO lecturers (email, password_hash, lecturer_name)
             VALUES (%s,%s ,%s)
@@ -396,21 +419,28 @@ def register_lecturer(lecturer: LecturerCreate):
         connection.commit()
     except psycopg2.IntegrityError:
         connection.rollback()
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already registered") # Handle duplicate email
     finally:
         connection.close()
 
     return {"message": "Lecturer registered successfully"}
 
-@app.post("/login")
+@app.post("/login", summary="Lecturer Login", description="Authenticate a lecturer and receive a JWT token.")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    Lecturer login to receive JWT token.
+    :param form_data: OAuth2PasswordRequestForm containing username and password
+    :return: JWT token for authenticated lecturer
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    # Fetch lecturer by email
     cursor.execute(""" SELECT * FROM lecturers WHERE email = %s""", (form_data.username, ))
     lecturer = cursor.fetchone()
     connection.close()
 
+    # Verify password
     if not lecturer or not verify_password(form_data.password, lecturer["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -418,29 +448,40 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Create JWT token
     access_token = create_access_token(
         data={"sub": lecturer["email"]}
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 class ModuleCreate(BaseModel):
+    """ Model for creating a new module """
     module_name: str
     module_code: str
     assessment_count: int
 
 class ModuleUpdate(BaseModel):
+    """ Model for updating module details """
     module_name: Optional[str] = None
     assessment_count: Optional[int] = None
+    module_code: Optional[str] = None
 
-@app.post("/modules")
+@app.post("/modules", summary="Create Module", description="Create a new module associated with the logged-in lecturer.")
 def create_module(
         module: ModuleCreate,
         current_user: str = Depends(get_current_user)
 ):
+    """
+    Create a new module.
+    :param module: ID of the module to create
+    :param current_user: Email of the current logged-in lecturer
+    :return: Success message
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
+        # Insert new module into the database
         cursor.execute("""
             INSERT INTO modules (module_name, module_code, assessment_count, lecturer_email) VALUES (%s, %s, %s, %s)
         """,
@@ -448,19 +489,25 @@ def create_module(
         connection.commit()
     except psycopg2.IntegrityError:
         connection.rollback()
-        raise HTTPException(status_code=400, detail="Module code already exists")
+        raise HTTPException(status_code=400, detail="Module code already exists") # Handle duplicate module code
     finally:
         connection.close()
 
     return {"message": f"Module {module.module_code} created successfully"}
 
-@app.get("/modules")
+@app.get("/modules", summary="Get Modules", description="Retrieve a list of modules associated with the logged-in lecturer.")
 def get_modules(
         current_user_email: str = Depends(get_current_user)
 ):
+    """
+    Get modules for the logged-in lecturer.
+    :param current_user_email: Email of the current logged-in lecturer
+    :return: List of modules
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    # SQL query to fetch modules for the lecturer
     cursor.execute("""
         SELECT * 
         FROM modules 
@@ -471,24 +518,35 @@ def get_modules(
 
     return modules
 
-@app.put("/modules/{module_code}")
+@app.put("/modules/{module_code}", summary="Update Module", description="Update details of a specific module associated with the logged-in lecturer.")
 def update_module(
         module_code: str,
         module_update: ModuleUpdate,
         current_user_email: str = Depends(get_current_user)
 ):
+    """
+    Update a module's details.
+    :param module_code: ID of the module to update
+    :param module_update: ModuleUpdate object containing updated details
+    :param current_user_email: Email of the current logged-in lecturer
+    :return: Success message
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    # Check if module exists and belongs to the lecturer
     cursor.execute("""
         SELECT * 
         FROM modules 
         WHERE module_code = ? AND lecturer_email = %s
     """, (module_code, current_user_email))
+
+    # If module not found, raise 404 error
     if not cursor.fetchone():
         connection.close()
         raise HTTPException(status_code=404, detail="Module not found or access denied")
 
+    # Update module details
     if module_update.module_name:
         cursor.execute(""" UPDATE modules SET module_name = ? WHERE module_code = %s """, (module_update.module_name, module_code))
     if module_update.assessment_count:
@@ -498,26 +556,38 @@ def update_module(
     connection.close()
     return {"message": f"Module {module_update.module_code} updated successfully"}
 
-@app.delete("/modules/{module_code}")
+@app.delete("/modules/{module_code}", summary="Delete Module", description="Delete a specific module associated with the logged-in lecturer.")
 def delete_module(
         module_code: str,
         current_user_email: str = Depends(get_current_user)
 ):
+    """
+    Delete a module.
+    :param module_code: ID of the module to delete
+    :param current_user_email: Email of the current logged-in lecturer
+    :return: Success message
+    """
     connection = get_db_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    # Check if module exists and belongs to the lecturer
     cursor.execute("""
         SELECT * 
         FROM modules 
         WHERE module_code = %s AND lecturer_email = %s
     """, (module_code, current_user_email))
+
+    # If module not found, raise 404 error
     if not cursor.fetchone():
         connection.close()
         raise HTTPException(status_code=404, detail="Module not found or access denied")
 
+    # Delete the module
     cursor.execute(""" DELETE FROM modules WHERE module_code = %s """, (module_code,))
+
     connection.commit()
     connection.close()
+
     return {"message": f"Module {module_code} deleted successfully"}
 
 
