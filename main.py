@@ -259,6 +259,9 @@ async def post_grades(
     try:
         contents = await file.read()
         grades_df = pd.read_csv(io.StringIO(contents.decode("utf-8"))) # Read CSV into DataFrame
+
+        ### Grades Upsert Logic ###
+
         # Add module and progress columns
         grades_df["module"] = module_id
         grades_df["progress_in_semester"] = progress_in_semester
@@ -316,6 +319,8 @@ async def post_grades(
                        """
         cursor.executemany(upsert_query, student_data)
         raw_conn.commit()
+
+        ### Risk Score Calculation Logic ###
 
         # Ensure features have the correct name and order for the model
         features = student_df[[
@@ -377,6 +382,8 @@ async def post_grades(
         cursor.executemany(upsert_query, risk_scores_data)
         raw_conn.commit()
 
+        ### Notification Logic ###
+
         # Identify students who have newly become at risk (risk_score > 70) and were not previously at risk (previous_risk_score <= 70)
         newly_at_risk_students = student_df[
             (student_df["risk_score"] > 70) &
@@ -384,12 +391,12 @@ async def post_grades(
             (student_df["previous_risk_score"] > 0)
         ]
 
+        # Fetch lecturer email for the module
+        cursor.execute("SELECT lecturer_email FROM modules WHERE module_code = %s", (module_id,))
+        lecturer_email = cursor.fetchone()[0]
+
         # Insert notifications for newly at-risk students
         if not newly_at_risk_students.empty:
-
-            # Fetch lecturer email for the module
-            cursor.execute("SELECT lecturer_email FROM modules WHERE module_code = %s", (module_id,))
-            lecturer_email = cursor.fetchone()[0]
 
             if lecturer_email:
                 notifications_data = []
@@ -398,7 +405,7 @@ async def post_grades(
                     payload = {
                         "student_id": row['student_id'],
                         "module_id": row['module'],
-                        "text": f"Student {row['student_name']} (ID: {row['student_id']}) has become at risk with a score of {row['risk_score']}.",
+                        "text": f"Student {row['student_name']} (ID: {row['student_id']}) has become at risk with a score of {row['risk_score'].round(2)}.",
                     }
 
                     notifications_data.append({
@@ -413,6 +420,24 @@ async def post_grades(
                                      """
                 cursor.executemany(notification_query, notifications_data)
                 raw_conn.commit()
+
+        # Insert notification for grades uploaded successfully
+        payload = {
+            "module_id": module_id,
+            "text": f"Grades for module {module_id} have been uploaded successfully and risk scores updated."
+        }
+        notification_data = {
+            "lecturer_email": lecturer_email,
+            "message": json.dumps(payload),
+            "notification_type": "UPLOAD_SUCCESS"
+        }
+
+        notification_query = """
+                             INSERT INTO notifications (lecturer_email, message, notification_type)
+                             VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s) \
+                             """
+        cursor.execute(notification_query, notification_data)
+        raw_conn.commit()
 
         return {"message": "Grades inserted and risk scores updated successfully"}
 
