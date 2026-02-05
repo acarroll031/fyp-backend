@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import bcrypt
 import joblib
@@ -376,6 +377,43 @@ async def post_grades(
         cursor.executemany(upsert_query, risk_scores_data)
         raw_conn.commit()
 
+        # Identify students who have newly become at risk (risk_score > 70) and were not previously at risk (previous_risk_score <= 70)
+        newly_at_risk_students = student_df[
+            (student_df["risk_score"] > 70) &
+            (student_df["previous_risk_score"] <= 70) &
+            (student_df["previous_risk_score"] > 0)
+        ]
+
+        # Insert notifications for newly at-risk students
+        if not newly_at_risk_students.empty:
+
+            # Fetch lecturer email for the module
+            cursor.execute("SELECT lecturer_email FROM modules WHERE module_code = %s", (module_id,))
+            lecturer_email = cursor.fetchone()[0]
+
+            if lecturer_email:
+                notifications_data = []
+
+                for _, row in newly_at_risk_students.iterrows():
+                    payload = {
+                        "student_id": row['student_id'],
+                        "module_id": row['module'],
+                        "text": f"Student {row['student_name']} (ID: {row['student_id']}) has become at risk with a score of {row['risk_score']}.",
+                    }
+
+                    notifications_data.append({
+                        "lecturer_email": lecturer_email,
+                        "message": json.dumps(payload),
+                        "notification_type": "RISK_ALERT"
+                    })
+
+                notification_query = """
+                                     INSERT INTO notifications (lecturer_email, message, notification_type)
+                                     VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s)
+                                     """
+                cursor.executemany(notification_query, notifications_data)
+                raw_conn.commit()
+
         return {"message": "Grades inserted and risk scores updated successfully"}
 
     except Exception as e:
@@ -590,6 +628,94 @@ def delete_module(
 
     return {"message": f"Module {module_code} deleted successfully"}
 
+@app.get("/notifications", summary="Get Notifications", description="Retrieve notifications for the logged-in lecturer about students at risk.")
+def get_notifications(current_user: str = Depends(get_current_user)):
+    """
+    Get notifications for the logged-in lecturer about students at risk.
+    :param current_user: Email of the current logged-in lecturer
+    :return: List of notifications
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
+    try:
+        # SQL query to fetch notifications for the lecturer
+        cursor.execute("""
+            SELECT * FROM notifications
+            WHERE lecturer_email = %s
+            ORDER BY created_at DESC
+        """, (current_user,))
+        notifications = cursor.fetchall()
+        return notifications
+    finally:
+        connection.close()
 
+@app.put("/notifications/{notification_id}/unread", summary="Mark Notification as Unread", description="Mark a specific notification as unread for the logged-in lecturer.")
+def mark_notification_as_read(notification_id: int, current_user: str = Depends(get_current_user)):
+    """
+    Mark a notification as unread.
+    :param notification_id: ID of the notification to mark as unread
+    :param current_user: Email of the current logged-in lecturer
+    :return: Success message
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # Check if notification exists and belongs to the lecturer
+        cursor.execute("""
+            SELECT * FROM notifications
+            WHERE id = %s AND lecturer_email = %s
+        """, (notification_id, current_user))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Notification not found or access denied")
+
+        # Mark the notification as unread
+        cursor.execute("""
+            UPDATE notifications
+            SET is_read = FALSE
+            WHERE id = %s AND lecturer_email = %s
+        """, (notification_id, current_user))
+
+        connection.commit()
+        return {"message": "Notification marked as unread"}
+    finally:
+        connection.close()
+
+@app.put("/notifications/{notification_id}/read", summary="Mark Notification as Read", description="Mark a specific notification as read for the logged-in lecturer.")
+def mark_notification_as_read(notification_id: int, current_user: str = Depends(get_current_user)):
+    """
+    Mark a notification as read.
+    :param notification_id: ID of the notification to mark as read
+    :param current_user: Email of the current logged-in lecturer
+    :return: Success message
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # Check if notification exists and belongs to the lecturer
+        cursor.execute("""
+                       SELECT *
+                       FROM notifications
+                       WHERE id = %s
+                         AND lecturer_email = %s
+                       """, (notification_id, current_user))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Notification not found or access denied")
+
+        # Mark the notification as read
+        cursor.execute("""
+                       UPDATE notifications
+                       SET is_read = TRUE
+                       WHERE id = %s
+                         AND lecturer_email = %s
+                       """, (notification_id, current_user))
+
+        connection.commit()
+        return {"message": "Notification marked as read"}
+    finally:
+        connection.close()
 
