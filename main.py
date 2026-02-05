@@ -405,7 +405,7 @@ async def post_grades(
                     payload = {
                         "student_id": row['student_id'],
                         "module_id": row['module'],
-                        "text": f"Student {row['student_name']} (ID: {row['student_id']}) has become at risk with a score of {row['risk_score'].round(2)}.",
+                        "text": f"Student {row['student_name']} (ID: {row['student_id']}) has become at risk with a score of {round(row['risk_score'], 2)}.",
                     }
 
                     notifications_data.append({
