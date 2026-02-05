@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import joblib
-from sklearn.model_selection import train_test_split, GridSearchCV, GroupShuffleSplit
+from sklearn.model_selection import GridSearchCV, GroupShuffleSplit
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
@@ -9,166 +9,233 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 
-def train_model(file_root_1,file_root_2, progress_threshold):
+def load_and_prepare_data(file_root_1, file_root_2, progress_threshold):
     """
-    Train a RandomForestRegressor model to predict student risk scores based on
-    features such as average score, assessments completed, performance trend,
-    and progress in semester. The trained model is saved to a file for future use.
+    Helper function to load data from two sources, combine them,
+    and split into training/testing sets using GroupShuffleSplit.
     """
     # Load the training data
     df = pd.read_csv(file_root_1 + progress_threshold + ".csv")
     df2 = pd.read_csv(file_root_2 + progress_threshold + ".csv")
     df_combined = pd.concat([df, df2], ignore_index=True)
 
-    print(df_combined)
-
     # Select features and target variable
-    features = ["average_score", "assessments_completed", "performance_trend", "progress_in_semester", "max_consecutive_misses"]
+    features = ["average_score", "assessments_completed", "performance_trend", "progress_in_semester",
+                "max_consecutive_misses"]
     target = "risk_score"
-    groups = df_combined["Student ID"]
+    groups = df_combined["Student ID"] # Use Student ID as groups to ensure no data leakage between train and test
 
+    # Prepare X and y
     X = df_combined[features]
     y = df_combined[target]
 
+    # Use GroupShuffleSplit to ensure the same student doesn't appear in both train and test
     gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
     train_idx, test_idx = next(gss.split(X, y, groups=groups))
 
-    # Split the data into training and testing sets
+    # Split the data
     X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
     y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
+    return X_train, X_test, y_train, y_test
+
+
+def train_random_forest(file_root_1, file_root_2, progress_threshold):
+    """
+    Trains and tunes a Random Forest Regressor as a baseline model.
+    """
+    print(f"\n--- Starting Random Forest Training ({progress_threshold}) ---")
+
+    # Load and prepare data using the helper function
+    X_train, X_test, y_train, y_test = load_and_prepare_data(file_root_1, file_root_2, progress_threshold)
+
+    # Hyperparameter grid for Tuning
     param_grid = {
         'n_estimators': [100, 300, 500],
         'max_depth': [10, 20, 30, None],
-        'max_features': ['sqrt', 'log2', 1.0],  # Test different feature selection strategies
-        'min_samples_split': [2, 5, 10]  # Control node splitting to prevent overfitting
+        'max_features': ['sqrt', 'log2', 1.0],
+        'min_samples_split': [2, 5, 10]
     }
 
-    # param_grid = {
-    #     'n_estimators': [100, 300, 500],
-    #     'max_depth': [10, 20, 30, None],
-    # }
-
-
-    # Initialize and train the model
-
     model = RandomForestRegressor(random_state=42)
-    #  model = XGBRegressor(random_state=42)
 
-    #model = RandomForestRegressor(random_state=42)
     grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='r2', n_jobs=-1)
 
-    print("Starting hyperparameter tuning with GridSearchCV... (This may take a while)")
+    print("Hyperparameter tuning (RF)...")
     grid_search.fit(X_train, y_train)
-    print("\nTuning complete!")
+    print("Tuning complete!")
 
-    # --- Save and Print Tuning Results ---
-    print(f"Best parameters found: {grid_search.best_params_}")
-    print(f"Best R-squared score from cross-validation: {grid_search.best_score_:.4f}")
-
-    # Convert results to a DataFrame and save
-    results_df = pd.DataFrame(grid_search.cv_results_).sort_values(by='rank_test_score')
-    results_df.to_csv(f"grid_search_results_{progress_threshold}.csv", index=False)
-    print(f"Tuning results saved to grid_search_results_{progress_threshold}.csv")
-
-    # Print the best combination of parameters it found
-    print(f"Best parameters found: {grid_search.best_params_}")
-
-    # Print the best R-squared score it achieved during cross-validation
-    print(f"Best R-squared score from Grid Search: {grid_search.best_score_:.2f}")
-
-    print("\n--- Final Model Evaluation on the Unseen Test Set ---")
+    # Evaluate the best model on the test set
     best_model = grid_search.best_estimator_
-
-    # Make predictions on the test data
     y_pred = best_model.predict(X_test)
 
-    # Calculate final error metrics
+    # Calculate performance metrics
     mse = mean_squared_error(y_test, y_pred)
-    final_rmse = np.sqrt(mse)
-    final_r2 = r2_score(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
 
-    print(f"Final Root Mean Squared Error (RMSE): {final_rmse:.2f}")
-    print(f"Final R^2 Score: {final_r2:.4f}")
+    # Print results
+    print(f"RF - Best Params: {grid_search.best_params_}")
+    print(f"RF - Final RMSE: {rmse:.2f}")
+    print(f"RF - Final R^2: {r2:.4f}")
 
-    # Save the final, best-performing model
+    # Save Results
+    results_df = pd.DataFrame(grid_search.cv_results_).sort_values(by='rank_test_score')
+    results_df.to_csv(f"grid_search_results_RF_{progress_threshold}.csv", index=False)
+
+    # Save the best model
+    model_name = f"student_risk_model_RF_{progress_threshold}.joblib"
+    joblib.dump(best_model, model_name)
+    print(f"Saved RF model to {model_name}")
+
+    return r2  # Return score for comparison
+
+
+def train_xgboost(file_root_1, file_root_2, progress_threshold):
+    """
+    Trains and tunes an XGBoost Regressor with a refined hyperparameter grid.
+    """
+    print(f"\n--- Starting XGBoost Training ({progress_threshold}) ---")
+
+    # Load and prepare data using the helper function
+    X_train, X_test, y_train, y_test = load_and_prepare_data(file_root_1, file_root_2, progress_threshold)
+
+    # Refined hyperparameter grid based on previous results and intuition
+    param_grid = {
+        'n_estimators': [300, 400],
+        'learning_rate': [0.01],
+        'max_depth': [4, 5, 6],
+        'min_child_weight': [5, 7, 9],
+        'gamma': [0.1, 0.2],
+        'subsample': [0.8],
+        'colsample_bytree': [1.0]
+    }
+
+    # Use the same objective and random state for consistency
+    model = XGBRegressor(objective='reg:squarederror', random_state=42, n_jobs=-1)
+
+    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='r2', n_jobs=-1, verbose=1)
+
+    print("Hyperparameter tuning (XGBoost - Refined)...")
+    grid_search.fit(X_train, y_train)
+    print("Tuning complete!")
+
+    # Evaluate the best model on the test set
+    best_model = grid_search.best_estimator_
+    y_pred = best_model.predict(X_test)
+
+    # Calculate performance metrics
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+
+    # Print results
+    print(f"XGB - Best Params: {grid_search.best_params_}")
+    print(f"XGB - Final RMSE: {rmse:.2f}")
+    print(f"XGB - Final R^2: {r2:.4f}")
+
+    # Analyze feature importances
+    print("\nFeature Importances:")
+    importances = pd.Series(best_model.feature_importances_, index=X_train.columns)
+    print(importances.sort_values(ascending=False))
+
+    # Save Results
+    results_df = pd.DataFrame(grid_search.cv_results_).sort_values(by='rank_test_score')
+    results_df.to_csv(f"grid_search_results_XGB_{progress_threshold}.csv", index=False)
+
+    # Save the best model
     model_name = f"student_risk_model_{progress_threshold}.joblib"
     joblib.dump(best_model, model_name)
-    print(f"Final best model saved to {model_name}")
+    print(f"Saved refined XGBoost model to {model_name}")
+
+    return r2 # Return score for comparison
 
 
 def train_knn_model(file_root_1, file_root_2, progress_threshold):
     """
-    Trains and tunes a KNeighborsRegressor model using a pipeline
-    to properly scale the features first.
+    Trains and tunes a KNeighborsRegressor model using a pipeline.
     """
-    # ... (Your data loading and combining code is the same) ...
-    df1 = pd.read_csv(file_root_1 + progress_threshold + ".csv")
-    df2 = pd.read_csv(file_root_2 + progress_threshold + ".csv")
-    df_combined = pd.concat([df1, df2], ignore_index=True)
+    print(f"\n--- Starting KNN Training ({progress_threshold}) ---")
 
-    features = ["average_score", "assessments_completed", "performance_trend", "progress_in_semester", "max_consecutive_misses"]
-    target = "risk_score"
-    groups = df_combined["Student ID"]
-    X = df_combined[features]
-    y = df_combined[target]
+    # Load and prepare data using the helper function
+    X_train, X_test, y_train, y_test = load_and_prepare_data(file_root_1, file_root_2, progress_threshold)
 
-    # ... (Your GroupShuffleSplit is the same) ...
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, test_idx = next(gss.split(X, y, groups=groups))
-    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-
-    # --- 1. Create the Pipeline ---
-    # This pipeline defines the steps: first, scale the data,
-    # then, run the KNN model.
+    # Create a pipeline that includes scaling and the KNN regressor
     pipe = Pipeline([
         ('scaler', StandardScaler()),
         ('knn', KNeighborsRegressor())
     ])
 
-    # --- 2. Define the Hyperparameter Grid for the Pipeline ---
-    # When tuning a pipeline, you must prefix the parameter names
-    # with the step name (e.g., 'knn__n_neighbors').
+    # Hyperparameter grid for KNN tuning
     param_grid = {
-        'knn__n_neighbors': [3, 5, 7, 11, 15],  # The 'K' value (how many neighbors)
-        'knn__weights': ['uniform', 'distance']  # 'distance' gives more weight to closer neighbors
+        'knn__n_neighbors': [3, 5, 7, 11, 15],
+        'knn__weights': ['uniform', 'distance']
     }
 
-    # --- 3. Run GridSearchCV on the Pipeline ---
-    grid_search = GridSearchCV(estimator=pipe, param_grid=param_grid, cv=5, scoring='r2', n_jobs=-1, verbose=2)
+    # Use GridSearchCV to find the best hyperparameters for KNN
+    grid_search = GridSearchCV(estimator=pipe, param_grid=param_grid, cv=5, scoring='r2', n_jobs=-1, verbose=1)
 
-    print("Starting hyperparameter tuning for KNN...")
+    print("Hyperparameter tuning (KNN)...")
     grid_search.fit(X_train, y_train)
-    print("\nTuning complete!")
+    print("Tuning complete!")
 
-    # --- 4. Evaluate the Best KNN Model ---
-    print(f"Best KNN parameters found: {grid_search.best_params_}")
-    print(f"Best KNN R-squared score from cross-validation: {grid_search.best_score_:.4f}")
-
+    # Evaluate the best model on the test set
     best_knn_model = grid_search.best_estimator_
     y_pred = best_knn_model.predict(X_test)
 
+    # Calculate performance metrics
     mse = mean_squared_error(y_test, y_pred)
-    final_rmse = np.sqrt(mse)
-    final_r2 = r2_score(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
 
-    print("\n--- Final KNN Model Evaluation on the Unseen Test Set ---")
-    print(f"Final Root Mean Squared Error (RMSE): {final_rmse:.2f}")
-    print(f"Final R^2 Score: {final_r2:.4f}")
+    # Print results
+    print(f"KNN - Final RMSE: {rmse:.2f}")
+    print(f"KNN - Final R^2: {r2:.4f}")
 
-# for i in range(1, 11):
-#     progress_threshold = str(i / 10)
-#     train_model(file_root="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_", progress_threshold=progress_threshold)
+    return r2 # Return score for comparison
 
-# train_knn_model(
-#     file_root_1="trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_",
-#     file_root_2="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_" ,
-#     progress_threshold="0.1-1.0"
-# )
 
-train_model(
-    file_root_1="trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_",
-    file_root_2="trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_" ,
-    progress_threshold="0.1-1.0"
-)
+if __name__ == "__main__":
+    # Define file paths
+    file_1 = "trainingData/CS161_Data/CS161_Combined_Totals_1_normalised_training_"
+    file_2 = "trainingData/CS161_Data/CS161_Combined_Totals_2_normalised_training_"
+    threshold = "0.1-1.0"
+
+    print("========================================")
+    print("      COMPARING MODEL PERFORMANCE       ")
+    print("========================================")
+
+    # 1. Train Random Forest
+    rf_score = train_random_forest(file_1, file_2, threshold)
+
+    # 2. Train XGBoost
+    xgb_score = train_xgboost(file_1, file_2, threshold)
+
+    # 3. Train KNN
+    knn_score = train_knn_model(file_1, file_2, threshold)
+
+    print("\n========================================")
+    print("           FINAL COMPARISON             ")
+    print("========================================")
+    print(f"Random Forest R^2: {rf_score:.4f}")
+    print(f"XGBoost R^2:       {xgb_score:.4f}")
+    print(f"KNN R^2:           {knn_score:.4f}")
+
+    # Calculate percentage improvement of XGBoost and KNN over Random Forest
+    improvement_xgb = ((xgb_score - rf_score) / rf_score) * 100
+    improvement_knn = ((knn_score - rf_score) / rf_score) * 100
+
+    # Print the improvements of XGBoost compared to Random Forest
+    print("XGBoost vs Random Forest:")
+    if improvement_xgb > 0:
+        print(f"XGBoost improved performance by {improvement_xgb:.2f}%")
+    else:
+        print(f"Random Forest performed better by {abs(improvement_xgb):.2f}%")
+    print("========================================")
+    # Print the improvements of KNN compared to Random Forest
+    print("KNN vs Random Forest:")
+    if improvement_knn > 0:
+        print(f"KNN improved performance by {improvement_knn:.2f}%")
+    else:
+        print(f"Random Forrest performed better by {abs(improvement_knn):.2f}%")
+    print("========================================")

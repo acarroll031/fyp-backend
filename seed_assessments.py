@@ -4,9 +4,9 @@ import time
 
 # --- CONFIGURATION ---
 API_URL = "http://127.0.0.1:8000"
-MODULE_CODE = "CS161"  # Change this to match your target module
+MODULE_CODE = "CS210"  # Change this to match your target module
 CSV_FOLDER = "Sample Assessment CSVs"  # Folder where your 12 files are
-TOTAL_ASSESSMENTS = 12
+TOTAL_ASSESSMENTS = 8
 
 
 def seed_assessments():
