@@ -162,7 +162,7 @@ def get_students(current_user_email: str = Depends(get_current_user)):
 
     # SQL query to fetch students associated with the lecturer
     query="""
-        SELECT s.student_id, s.student_name, s.module, s.risk_score
+        SELECT s.student_id, s.student_name, s.module, s.risk_score, s.previous_risk_score
         FROM risk_scores s
         JOIN modules m ON s.module = m.module_code
         WHERE m.lecturer_email = %s
@@ -268,6 +268,15 @@ async def post_grades(
         # Create an email mapping to preserve emails to add back in later
         email_mapping = grades_df[["student_id", "email"]].drop_duplicates()
         grades_data = grades_df.to_dict(orient='records')
+
+        # SQL Query to add students to the students table if they don't exist (without features, just ID, name, email, module)
+        add_students = """
+               INSERT INTO students (student_id, student_name, email, module)
+               VALUES (%(student_id)s, %(student_name)s, %(email)s, %(module)s)
+               ON CONFLICT (student_id, module) DO NOTHING
+               """
+        cursor.executemany(add_students, grades_data)
+        raw_conn.commit()
 
         # SQL query to upsert grades
         upsert_query = """
@@ -411,12 +420,13 @@ async def post_grades(
                     notifications_data.append({
                         "lecturer_email": lecturer_email,
                         "message": json.dumps(payload),
-                        "notification_type": "RISK_ALERT"
+                        "notification_type": "RISK_ALERT",
+                        "module_id": module_id
                     })
 
                 notification_query = """
-                                     INSERT INTO notifications (lecturer_email, message, notification_type)
-                                     VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s)
+                                     INSERT INTO notifications (lecturer_email, message, notification_type, module)
+                                     VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s, %(module_id)s) \
                                      """
                 cursor.executemany(notification_query, notifications_data)
                 raw_conn.commit()
@@ -429,12 +439,13 @@ async def post_grades(
         notification_data = {
             "lecturer_email": lecturer_email,
             "message": json.dumps(payload),
-            "notification_type": "UPLOAD_SUCCESS"
+            "notification_type": "UPLOAD_SUCCESS",
+            "module_id": module_id
         }
 
         notification_query = """
-                             INSERT INTO notifications (lecturer_email, message, notification_type)
-                             VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s) \
+                             INSERT INTO notifications (lecturer_email, message, notification_type, module)
+                             VALUES (%(lecturer_email)s, %(message)s, %(notification_type)s, %(module_id)s) \
                              """
         cursor.execute(notification_query, notification_data)
         raw_conn.commit()
