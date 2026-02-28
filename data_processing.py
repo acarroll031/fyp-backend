@@ -2,7 +2,6 @@ import hashlib
 
 import pandas as pd
 import numpy as np
-from defusedxml.lxml import tostring
 
 
 def anonymise_id(student_id, salt):
@@ -72,12 +71,12 @@ def preprocess_module_data(
 
 # Create processed data for CS161 module with 10 assessments, each out of 4 marks
 ## The Student_Data.csv file was deleted from the repository for privacy reasons
-preprocess_module_data(
-    "training_data/Student_Data.csv",
-    "CS161",
-    total_assessments=10,
-    assessment_total_score=4,
-)
+# preprocess_module_data(
+#     "training_data/Student_Data.csv",
+#     "CS161",
+#     total_assessments=10,
+#     assessment_total_score=4,
+# )
 
 
 def calculate_performance_trend(student_scores):
@@ -212,12 +211,12 @@ def training_data(csv_file, progress_threshold):
 
 
 # Generate training data for progress thresholds from 0.1 to 1.0
-for i in range(1, 11):
-    progress_threshold = i / 10
-    training_data(
-        csv_file="training_data/Student_Data_processed.csv",
-        progress_threshold=progress_threshold,
-    )
+# for i in range(1, 11):
+#     progress_threshold = i / 10
+#     training_data(
+#         csv_file="training_data/Student_Data_processed.csv",
+#         progress_threshold=progress_threshold,
+#     )
 
 
 def combine_training_data(file_list, output_file):
@@ -235,10 +234,10 @@ def combine_training_data(file_list, output_file):
     print(f"Combined training data saved to {output_file}")
 
 
-combine_training_data(
-    [f"training_data/Student_Data_training_{i/10}.csv" for i in range(1, 11)],
-    "training_data/Student_Data_training_0.1-1.0.csv",
-)
+# combine_training_data(
+#     [f"training_data/Student_Data_training_{i/10}.csv" for i in range(1, 11)],
+#     "training_data/Student_Data_training_0.1-1.0.csv",
+# )
 
 
 def convert_grades_to_students(grades_df):
