@@ -4,11 +4,14 @@ import time
 
 # --- CONFIGURATION ---
 API_URL = "http://127.0.0.1:8000"
-MODULE_CODE = "CS210"  # Change this to match your target module
-CSV_FOLDER = "Sample Assessment CSVs"  # Folder where your 12 files are
-TOTAL_ASSESSMENTS = 8
+MODULE_CODE = "CS401"  # Change this to match your target module
+CSV_FOLDER = "sample_assessment_data"  # Folder where your 12 files are
+TOTAL_ASSESSMENTS = 2
 
 
+# This script was AI generated to automate the upload of assessment CSV files to the API.
+# It iterates through a specified number of assessment files, uploads them to the API endpoint, and prints the progress and results.
+# You can customize the API URL, module code, folder path, and total assessments as needed.
 def seed_assessments():
     print(f"🚀 Starting automated upload for module: {MODULE_CODE}")
 
@@ -39,7 +42,7 @@ def seed_assessments():
                 response = requests.post(
                     f"{API_URL}/students/{MODULE_CODE}/grades",
                     params={"progress_in_semester": progress},
-                    files=files
+                    files=files,
                 )
 
             if response.status_code == 200:

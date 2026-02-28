@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 
 
+# This script generates sample assessment CSV files with a specified missing rate.
+# It was created using Gemini, as to generate fake data with a specific pattern, to save time.
+# The script takes a source CSV file (e.g., 'test_upload.csv') that contains student IDs and names, and then creates multiple assessment files where some students receive a score of 0 to simulate them missing the exam.
 def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate=0.10):
     """
     Generates assessment files where some students get 0 because they didn't turn up.
@@ -10,14 +13,16 @@ def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate
     """
     # 1. Load students
     df_source = pd.read_csv(source_file)
-    students_base = df_source[['student_id', 'student_name']].drop_duplicates()
-    students_base['email'] = 'student' + students_base['student_id'].astype(str) + '@mumail.ie'
+    students_base = df_source[["student_id", "student_name"]].drop_duplicates()
+    students_base["email"] = (
+        "student" + students_base["student_id"].astype(str) + "@mumail.ie"
+    )
 
     print(f"Generating files with a {int(missing_rate * 100)}% missing rate...")
 
     for i in range(1, num_files + 1):
         df_current = students_base.copy()
-        df_current['assessment_number'] = i
+        df_current["assessment_number"] = i
 
         # 2. Generate base scores (Normal Distribution)
         scores = np.random.normal(loc=65, scale=15, size=len(df_current))
@@ -31,10 +36,10 @@ def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate
         # Overwrite the scores where the mask is True with 0
         scores[missed_mask] = 0
 
-        df_current['score'] = np.round(scores, 2)
+        df_current["score"] = np.round(scores, 2)
 
         # 4. Save
-        filename = f'Sample Assessment CSVs/assessment_{i}.csv'
+        filename = f"Sample Assessment CSVs/assessment_{i}.csv"
         df_current.to_csv(filename, index=False)
 
         # Optional: Print how many missed this specific assessment
@@ -43,4 +48,4 @@ def generate_assessment_data_with_misses(source_file, num_files=12, missing_rate
 
 
 if __name__ == "__main__":
-    generate_assessment_data_with_misses('test_upload.csv')
+    generate_assessment_data_with_misses("test_upload.csv")
