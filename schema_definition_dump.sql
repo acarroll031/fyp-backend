@@ -2,12 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict tn8IJwPLx1eBEcZ2TWsMZmh7U3HueoVV6pxfWqycHLGBp3AdfGsQG8oMcKixiNc
+\restrict dEEuEeB6b429g2D0WycMYEL5vPIiz2sflejU0LJG8l7wbVr1R5sbhSxs5yNlgL4
 
 -- Dumped from database version 17.8 (6108b59)
 -- Dumped by pg_dump version 17.7
-
--- Started on 2026-02-25 18:46:49
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -26,8 +24,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 220 (class 1259 OID 49486)
--- Name: grades; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: grades; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.grades (
@@ -40,11 +37,8 @@ CREATE TABLE public.grades (
 );
 
 
-ALTER TABLE public.grades OWNER TO neondb_owner;
-
 --
--- TOC entry 217 (class 1259 OID 49455)
--- Name: lecturers; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: lecturers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.lecturers (
@@ -54,11 +48,8 @@ CREATE TABLE public.lecturers (
 );
 
 
-ALTER TABLE public.lecturers OWNER TO neondb_owner;
-
 --
--- TOC entry 218 (class 1259 OID 49462)
--- Name: modules; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: modules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.modules (
@@ -69,11 +60,8 @@ CREATE TABLE public.modules (
 );
 
 
-ALTER TABLE public.modules OWNER TO neondb_owner;
-
 --
--- TOC entry 225 (class 1259 OID 122881)
--- Name: notifications; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: notifications; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.notifications (
@@ -87,11 +75,8 @@ CREATE TABLE public.notifications (
 );
 
 
-ALTER TABLE public.notifications OWNER TO neondb_owner;
-
 --
--- TOC entry 224 (class 1259 OID 122880)
--- Name: notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+-- Name: notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.notifications_id_seq
@@ -103,20 +88,15 @@ CREATE SEQUENCE public.notifications_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.notifications_id_seq OWNER TO neondb_owner;
-
 --
--- TOC entry 3389 (class 0 OID 0)
--- Dependencies: 224
--- Name: notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+-- Name: notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.notifications_id_seq OWNED BY public.notifications.id;
 
 
 --
--- TOC entry 223 (class 1259 OID 81921)
--- Name: risk_history; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: risk_history; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.risk_history (
@@ -129,11 +109,8 @@ CREATE TABLE public.risk_history (
 );
 
 
-ALTER TABLE public.risk_history OWNER TO neondb_owner;
-
 --
--- TOC entry 222 (class 1259 OID 81920)
--- Name: risk_history_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+-- Name: risk_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.risk_history_id_seq
@@ -145,20 +122,15 @@ CREATE SEQUENCE public.risk_history_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.risk_history_id_seq OWNER TO neondb_owner;
-
 --
--- TOC entry 3390 (class 0 OID 0)
--- Dependencies: 222
--- Name: risk_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+-- Name: risk_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.risk_history_id_seq OWNED BY public.risk_history.id;
 
 
 --
--- TOC entry 221 (class 1259 OID 49493)
--- Name: risk_scores; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: risk_scores; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.risk_scores (
@@ -170,11 +142,8 @@ CREATE TABLE public.risk_scores (
 );
 
 
-ALTER TABLE public.risk_scores OWNER TO neondb_owner;
-
 --
--- TOC entry 219 (class 1259 OID 49474)
--- Name: students; Type: TABLE; Schema: public; Owner: neondb_owner
+-- Name: students; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.students (
@@ -190,27 +159,22 @@ CREATE TABLE public.students (
 );
 
 
-ALTER TABLE public.students OWNER TO neondb_owner;
-
 --
--- TOC entry 3214 (class 2604 OID 122884)
--- Name: notifications id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+-- Name: notifications id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications ALTER COLUMN id SET DEFAULT nextval('public.notifications_id_seq'::regclass);
 
 
 --
--- TOC entry 3212 (class 2604 OID 81924)
--- Name: risk_history id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+-- Name: risk_history id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.risk_history ALTER COLUMN id SET DEFAULT nextval('public.risk_history_id_seq'::regclass);
 
 
 --
--- TOC entry 3226 (class 2606 OID 49492)
--- Name: grades grades_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: grades grades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.grades
@@ -218,8 +182,7 @@ ALTER TABLE ONLY public.grades
 
 
 --
--- TOC entry 3218 (class 2606 OID 49461)
--- Name: lecturers lecturers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: lecturers lecturers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.lecturers
@@ -227,8 +190,7 @@ ALTER TABLE ONLY public.lecturers
 
 
 --
--- TOC entry 3220 (class 2606 OID 49468)
--- Name: modules modules_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: modules modules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.modules
@@ -236,8 +198,7 @@ ALTER TABLE ONLY public.modules
 
 
 --
--- TOC entry 3232 (class 2606 OID 122890)
--- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
@@ -245,8 +206,7 @@ ALTER TABLE ONLY public.notifications
 
 
 --
--- TOC entry 3230 (class 2606 OID 81927)
--- Name: risk_history risk_history_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: risk_history risk_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.risk_history
@@ -254,8 +214,7 @@ ALTER TABLE ONLY public.risk_history
 
 
 --
--- TOC entry 3228 (class 2606 OID 49499)
--- Name: risk_scores risk_scores_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: risk_scores risk_scores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.risk_scores
@@ -263,8 +222,7 @@ ALTER TABLE ONLY public.risk_scores
 
 
 --
--- TOC entry 3222 (class 2606 OID 73731)
--- Name: students students_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: students students_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.students
@@ -272,8 +230,7 @@ ALTER TABLE ONLY public.students
 
 
 --
--- TOC entry 3224 (class 2606 OID 73729)
--- Name: students students_student_id_module_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: students students_student_id_module_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.students
@@ -281,8 +238,7 @@ ALTER TABLE ONLY public.students
 
 
 --
--- TOC entry 3235 (class 2606 OID 196625)
--- Name: grades constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: grades constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.grades
@@ -290,8 +246,7 @@ ALTER TABLE ONLY public.grades
 
 
 --
--- TOC entry 3238 (class 2606 OID 196688)
--- Name: notifications constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: notifications constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
@@ -299,8 +254,7 @@ ALTER TABLE ONLY public.notifications
 
 
 --
--- TOC entry 3237 (class 2606 OID 196630)
--- Name: risk_history constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: risk_history constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.risk_history
@@ -308,8 +262,7 @@ ALTER TABLE ONLY public.risk_history
 
 
 --
--- TOC entry 3234 (class 2606 OID 196618)
--- Name: students constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: students constraint_1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.students
@@ -317,8 +270,7 @@ ALTER TABLE ONLY public.students
 
 
 --
--- TOC entry 3233 (class 2606 OID 196613)
--- Name: modules modules_lecturer_email_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: modules modules_lecturer_email_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.modules
@@ -326,8 +278,7 @@ ALTER TABLE ONLY public.modules
 
 
 --
--- TOC entry 3236 (class 2606 OID 196635)
--- Name: risk_scores risk_scores_student_fk; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+-- Name: risk_scores risk_scores_student_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.risk_scores
@@ -335,26 +286,8 @@ ALTER TABLE ONLY public.risk_scores
 
 
 --
--- TOC entry 2070 (class 826 OID 16394)
--- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: cloud_admin
---
-
-ALTER DEFAULT PRIVILEGES FOR ROLE cloud_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO neon_superuser WITH GRANT OPTION;
-
-
---
--- TOC entry 2069 (class 826 OID 16393)
--- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: cloud_admin
---
-
-ALTER DEFAULT PRIVILEGES FOR ROLE cloud_admin IN SCHEMA public GRANT ALL ON TABLES TO neon_superuser WITH GRANT OPTION;
-
-
--- Completed on 2026-02-25 18:46:51
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tn8IJwPLx1eBEcZ2TWsMZmh7U3HueoVV6pxfWqycHLGBp3AdfGsQG8oMcKixiNc
+\unrestrict dEEuEeB6b429g2D0WycMYEL5vPIiz2sflejU0LJG8l7wbVr1R5sbhSxs5yNlgL4
 
