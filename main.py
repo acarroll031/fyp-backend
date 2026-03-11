@@ -729,7 +729,7 @@ def update_module(
         """
         SELECT * 
         FROM modules 
-        WHERE module_code = ? AND lecturer_email = %s
+        WHERE module_code = %s AND lecturer_email = %s
     """,
         (module_code, current_user_email),
     )
@@ -742,12 +742,12 @@ def update_module(
     # Update module details
     if module_update.module_name:
         cursor.execute(
-            """ UPDATE modules SET module_name = ? WHERE module_code = %s """,
+            """ UPDATE modules SET module_name = %s WHERE module_code = %s """,
             (module_update.module_name, module_code),
         )
     if module_update.assessment_count:
         cursor.execute(
-            """ UPDATE modules SET assessment_count = ? WHERE module_code = %s """,
+            """ UPDATE modules SET assessment_count = %s WHERE module_code = %s """,
             (module_update.assessment_count, module_code),
         )
 

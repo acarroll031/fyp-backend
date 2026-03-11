@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import joblib
@@ -9,14 +10,19 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 
+# Project root is one level up from this script's directory
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def load_and_prepare_data(file_root, progress_threshold):
     """
-    Helper function to load data from two sources, combine them,
+    Helper function to load training data a CSV file
     and split into training/testing sets using GroupShuffleSplit.
     """
     # Load the training data
-    df = pd.read_csv(file_root + progress_threshold + ".csv")
+    df = pd.read_csv(
+        os.path.join(PROJECT_ROOT, file_root + progress_threshold + ".csv")
+    )
 
     # Select features and target variable
     features = [
@@ -92,12 +98,17 @@ def train_random_forest(file_root, progress_threshold):
     # Save Results
     results_df = pd.DataFrame(grid_search.cv_results_).sort_values(by="rank_test_score")
     results_df.to_csv(
-        f"model_training/grid_search_results_RF_{progress_threshold}.csv", index=False
+        os.path.join(
+            PROJECT_ROOT,
+            "model_training",
+            f"grid_search_results_RF_{progress_threshold}.csv",
+        ),
+        index=False,
     )
 
     # Save the best model
     model_name = f"student_risk_model_RF_{progress_threshold}.joblib"
-    joblib.dump(best_model, model_name)
+    joblib.dump(best_model, os.path.join(PROJECT_ROOT, model_name))
     print(f"Saved RF model to {model_name}")
 
     return r2  # Return score for comparison
@@ -158,12 +169,17 @@ def train_xgboost(file_root, progress_threshold):
     # Save Results
     results_df = pd.DataFrame(grid_search.cv_results_).sort_values(by="rank_test_score")
     results_df.to_csv(
-        f"model_training/grid_search_results_XGB_{progress_threshold}.csv", index=False
+        os.path.join(
+            PROJECT_ROOT,
+            "model_training",
+            f"grid_search_results_XGB_{progress_threshold}.csv",
+        ),
+        index=False,
     )
 
     # Save the best model
     model_name = f"student_risk_model_{progress_threshold}.joblib"
-    joblib.dump(best_model, model_name)
+    joblib.dump(best_model, os.path.join(PROJECT_ROOT, model_name))
     print(f"Saved refined XGBoost model to {model_name}")
 
     return r2  # Return score for comparison
@@ -215,9 +231,8 @@ def train_knn_model(file_root, progress_threshold):
 
 
 if __name__ == "__main__":
-    # Define file paths
-    file = "training_data/Student_Data_training_"
-    threshold = "0.1-1.0"
+    file = os.path.join("training_data", "Student_Data_training_")
+    threshold = "0.1-1.0"  # Use the combined training data for all progress thresholds
 
     print("========================================")
     print("      COMPARING MODEL PERFORMANCE       ")

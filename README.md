@@ -1,93 +1,271 @@
-# FYP25AM006 - Predictive Analytics for Student Success
+# Predictive Analytics for Student Success — Backend
 
+> **FYP25AM006** — Final Year Project  
+> A FastAPI backend that uses machine learning to predict student risk scores based on assessment performance, helping lecturers identify and support at-risk students early.
 
+---
 
-## Getting started
+## Table of Contents
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Variables](#environment-variables)
+  - [Running the Server](#running-the-server)
+- [API Endpoints](#api-endpoints)
+- [Machine Learning Model](#machine-learning-model)
+  - [Features Used](#features-used)
+  - [Training](#training)
+- [Seeding & Test Data](#seeding--test-data)
+- [Running Tests](#running-tests)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## Overview
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+This backend powers a web application that allows lecturers to:
+
+1. **Upload student grades** (CSV) for their modules.
+2. **Automatically calculate risk scores** for each student using a trained ML model.
+3. **View student details**, including grade history, risk score trends, and performance metrics.
+4. **Receive notifications** when a student becomes newly at risk.
+
+Risk scores are predicted from features derived from assessment data — such as average score, performance trend, consecutive missed assessments, and semester progress.
+
+## Features
+
+- **JWT Authentication** — Lecturer registration and login with hashed passwords (bcrypt) and JWT tokens.
+- **Module Management** — Create, read, update, and delete modules.
+- **Grade Upload** — Upload CSV files of student grades per module; grades are upserted into the database.
+- **Risk Prediction** — An XGBoost regression model predicts a risk score (0–100) for each student after every grade upload.
+- **Risk History Tracking** — Risk scores are recorded over time so lecturers can view trends.
+- **Notifications** — Automatic alerts when a student's risk score crosses the "at risk" threshold (>70) for the first time.
+- **REST API** — All functionality exposed via a RESTful API with interactive Swagger docs.
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [FastAPI](https://fastapi.tiangolo.com/) |
+| Language | Python 3.13 |
+| Database | PostgreSQL (via [psycopg2](https://www.psycopg.org/)) |
+| ML Models | [XGBoost](https://xgboost.readthedocs.io/), [scikit-learn](https://scikit-learn.org/), Random Forest |
+| Auth | JWT ([PyJWT](https://pyjwt.readthedocs.io/)), bcrypt |
+| Data Processing | [pandas](https://pandas.pydata.org/), NumPy |
+| Server | [Uvicorn](https://www.uvicorn.org/) |
+
+## Project Structure
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.cs.nuim.ie/u230473/fyp25am006-predictive-analytics-for-student-success.git
-git branch -M main
-git push -uf origin main
+fyp-backend/
+├── main.py                    # FastAPI application — all API endpoints
+├── data_processing.py         # Data preprocessing, feature engineering, and training data generation
+├── requirements.txt           # Python dependencies
+├── schema_definition_dump.sql # PostgreSQL schema definition
+│
+├── model_training/
+│   └── model_training.py      # Model training scripts (Random Forest, XGBoost, KNN)
+│
+├── student_risk_model_0.1-1.0.joblib   # Trained XGBoost model (loaded at startup)
+├── student_risk_model_RF_0.1-1.0.joblib # Trained Random Forest model
+│
+├── training_data/             # CSV training datasets at various progress thresholds
+├── sample_assessment_data/    # Sample CSV files for seeding grade uploads
+│
+├── generate_test_data.py      # Generate synthetic assessment CSVs with configurable miss rates
+├── seed_assessments.py        # Automate uploading sample assessment CSVs to the API
+├── seed_synthetic_tags.py     # Seed the database with synthetic students for each risk tag
+│
+└── tests/                     # Pytest test suite
+    ├── test_predict.py        # Tests for /predict endpoint
+    ├── test_students.py       # Tests for student endpoints
+    ├── test_modules.py        # Tests for module CRUD endpoints
+    ├── test_notifications.py  # Tests for notification endpoints
+    └── test_registration.py   # Tests for registration/login endpoints
 ```
 
-## Integrate with your tools
+## Database Schema
 
-- [ ] [Set up project integrations](https://gitlab.cs.nuim.ie/u230473/fyp25am006-predictive-analytics-for-student-success/-/settings/integrations)
+The PostgreSQL database contains the following tables (see `schema_definition_dump.sql` for full DDL):
 
-## Collaborate with your team
+| Table | Purpose |
+|---|---|
+| `lecturers` | Lecturer accounts (email, name, hashed password) |
+| `modules` | Modules with code, name, assessment count, and linked lecturer |
+| `students` | Per-module student records with computed features (avg score, trend, etc.) |
+| `grades` | Individual assessment grades per student per module |
+| `risk_scores` | Current and previous risk scores per student per module |
+| `risk_history` | Time-series log of all risk score changes |
+| `notifications` | Alerts for lecturers (risk alerts, upload confirmations) |
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Getting Started
 
-## Test and Deploy
+### Prerequisites
 
-Use the built-in continuous integration in GitLab.
+- **Python 3.13+**
+- **PostgreSQL** database (local or cloud-hosted, e.g. [Neon](https://neon.tech/))
+- **pip** (Python package manager)
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Installation
 
-***
+1. **Clone the repository:**
 
-# Editing this README
+   ```bash
+   git clone https://gitlab.cs.nuim.ie/u230473/fyp25am006-predictive-analytics-for-student-success.git
+   cd fyp25am006-predictive-analytics-for-student-success
+   ```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+2. **Create and activate a virtual environment (recommended):**
 
-## Suggestions for a good README
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+   # macOS / Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-## Name
-Choose a self-explaining name for your project.
+3. **Install dependencies:**
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+4. **Set up the database:**
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+   Create a PostgreSQL database and run the schema definition:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+   ```bash
+   psql -d <your_database> -f schema_definition_dump.sql
+   ```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Environment Variables
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Create a `.env` file in the project root with the following:
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```env
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Running the Server
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Start the FastAPI development server with Uvicorn:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+uvicorn main:app --reload
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+The API will be available at **http://127.0.0.1:8000**.
 
-## License
-For open source projects, say how it is licensed.
+- **Swagger UI (interactive docs):** http://127.0.0.1:8000/docs
+- **ReDoc:** http://127.0.0.1:8000/redoc
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## API Endpoints
+
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| `POST` | `/register` | Register a new lecturer | No |
+| `POST` | `/login` | Login and receive a JWT token | No |
+| `POST` | `/predict` | Predict a student's risk score from features | Yes |
+| `GET` | `/students` | List students for the logged-in lecturer | Yes |
+| `GET` | `/students/{student_id}/{module_id}` | Get detailed student info (grades, risk history) | Yes |
+| `POST` | `/students/{module_id}/grades` | Upload grades CSV and update risk scores | No |
+| `POST` | `/modules` | Create a new module | Yes |
+| `GET` | `/modules` | List modules for the logged-in lecturer | Yes |
+| `PUT` | `/modules/{module_code}` | Update a module | Yes |
+| `DELETE` | `/modules/{module_code}` | Delete a module | Yes |
+| `GET` | `/notifications` | Get notifications for the logged-in lecturer | Yes |
+| `PUT` | `/notifications/{id}/read` | Mark a notification as read | Yes |
+| `PUT` | `/notifications/{id}/unread` | Mark a notification as unread | Yes |
+
+### Grade CSV Format
+
+The CSV file uploaded to `/students/{module_id}/grades` should have the following columns:
+
+| Column | Type | Description |
+|---|---|---|
+| `student_id` | int | Unique student identifier |
+| `student_name` | str | Student's full name |
+| `email` | str | Student's email address |
+| `assessment_number` | int | Assessment number (e.g. 1, 2, 3…) |
+| `score` | float | Score achieved (0–100) |
+
+## Machine Learning Model
+
+The application loads a pre-trained **XGBoost Regressor** model (`student_risk_model_0.1-1.0.joblib`) at startup. This model predicts a **risk score (0–100)** for each student, where higher scores indicate greater risk of academic failure.
+
+### Features Used
+
+| Feature | Description |
+|---|---|
+| `average_score` | Mean score across all completed assessments |
+| `assessments_completed` | Number of assessments with a non-zero score |
+| `performance_trend` | Difference between average of second-half and first-half scores |
+| `max_consecutive_misses` | Longest streak of consecutive zero-score assessments |
+| `progress_in_semester` | Proportion of semester completed (0.0–1.0) |
+
+### Training
+
+Model training scripts are located in `model_training/model_training.py`. Three model types are supported:
+
+- **Random Forest Regressor** — baseline model
+- **XGBoost Regressor** — primary model (best performance)
+- **K-Nearest Neighbours Regressor** — alternative model
+
+Training uses **GroupShuffleSplit** (grouped by Student ID) to prevent data leakage, and **GridSearchCV** for hyperparameter tuning. To retrain:
+
+```bash
+cd model_training
+python model_training.py
+```
+
+Training data is generated from `data_processing.py` at various semester progress thresholds (0.1 to 1.0) and combined into a single dataset (`training_data/Student_Data_training_0.1-1.0.csv`).
+
+## Seeding & Test Data
+
+Several utility scripts are provided for populating the database with sample data:
+
+- **`seed_assessments.py`** — Automates uploading sample assessment CSVs (from `sample_assessment_data/`) to the running API. Configure `MODULE_CODE`, `CSV_FOLDER`, and `TOTAL_ASSESSMENTS` at the top of the file, then run:
+
+  ```bash
+  python seed_assessments.py
+  ```
+
+- **`seed_synthetic_tags.py`** — Seeds the database directly with synthetic students that cover each risk tag category (Newly At Risk, At Risk, Improving, On Track).
+
+  ```bash
+  python seed_synthetic_tags.py
+  ```
+
+- **`generate_test_data.py`** — Generates synthetic assessment CSV files with configurable missing rates for testing purposes.
+
+  ```bash
+  python generate_test_data.py
+  ```
+
+## Running Tests
+
+The test suite uses **pytest** with mocked database connections and ML models.
+
+```bash
+pytest
+```
+
+To run a specific test file:
+
+```bash
+pytest tests/test_predict.py
+```
+
+To run with verbose output:
+
+```bash
+pytest -v
+```
